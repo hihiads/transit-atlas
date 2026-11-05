@@ -9,7 +9,6 @@ import { api, AuthStatus } from './api';
 import { Vehicle, City, Stop, TransitShape } from './types';
 
 function App() {
-  const [cities, setCities] = useState<City[]>([]);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [stops, setStops] = useState<Stop[]>([]);
@@ -25,7 +24,6 @@ function App() {
   const [showShapes, setShowShapes] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [nearbyStops, setNearbyStops] = useState<Stop[]>([]);
-  const [selectedStopCityId, setSelectedStopCityId] = useState('');
   const [mapCenter, setMapCenter] = useState<[number, number]>([45.815, 15.9819]);
   const [mapZoom, setMapZoom] = useState(12);
   const [userLocation, setUserLocation] = useState<[number, number] | undefined>();
@@ -74,7 +72,6 @@ function App() {
     window.addEventListener('focus', refreshAuthStatus);
     api.getCities()
       .then(cities => {
-        setCities(cities);
         const activeCity = cities.find(c => c.status === 'active');
         if (activeCity) setSelectedCity(activeCity);
       })
@@ -94,7 +91,6 @@ function App() {
     setUserLocation(undefined);
     setNearbyStops([]);
     setSelectedStop(null);
-    setSelectedStopCityId('');
     setNearestDistance(null);
     setLocationMessage('');
     let cancelled = false;
@@ -124,7 +120,7 @@ function App() {
     // Učitaj stanice
     api.getStops(selectedCity.id)
       .then(response => {
-        const cityStops = response.stops.map(stop => ({ ...stop, cityId: selectedCity.id, mode: 'bus-tram' as const }));
+        const cityStops = response.stops.map(stop => ({ ...stop, cityId: selectedCity.id }));
         if (cancelled) return;
         setStops(cityStops);
         setNearbyStops(cityStops);
@@ -178,7 +174,6 @@ function App() {
       setUserLocation([coords.latitude, coords.longitude]);
       setNearestDistance(meters);
       setSelectedStop(nearest);
-      setSelectedStopCityId(nearest.cityId || selectedCity?.id || 'zagreb');
       setShowStops(true);
       setMapCenter([nearest.lat, nearest.lon]);
       setMapZoom(15);
@@ -237,9 +232,6 @@ function App() {
   return (
     <div className="w-full h-full flex flex-col">
       <Header
-        cities={cities}
-        selectedCity={selectedCity}
-        onCityChange={setSelectedCity}
         vehicleCount={filteredVehicles.length}
         totalVehicles={vehicles.length}
         dataStatus={dataStatus}
@@ -264,7 +256,7 @@ function App() {
           <div className="mt-4 space-y-2">
             <button onClick={findNearestStop} disabled={locating || nearbyStops.length === 0} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">
               {locating ? 'Tražim najbližu stanicu…' : 'Pronađi najbližu stanicu'}
-              <span className="mt-0.5 block text-xs font-normal text-slate-500">Autobus, tramvaj ili vlak</span>
+              <span className="mt-0.5 block text-xs font-normal text-slate-500">Autobus ili tramvaj</span>
             </button>
             <button
               onClick={() => setShowSchedule(true)}
@@ -324,7 +316,20 @@ function App() {
               Linije i polasci
             </button>
           </div>
-          {locationMessage && <div className="absolute top-16 left-3 right-3 z-[999] rounded-lg bg-white/95 p-3 text-sm text-slate-700 shadow md:hidden" role="status">{locationMessage}</div>}
+          <div className="absolute top-[4.25rem] left-3 right-3 z-[999] md:hidden">
+            <FilterPanel
+              compact
+              vehicles={vehicles}
+              selectedType={selectedType}
+              selectedLine={selectedLine}
+              onTypeChange={(type) => {
+                setSelectedType(type);
+                setSelectedLine('');
+              }}
+              onLineChange={setSelectedLine}
+            />
+          </div>
+          {locationMessage && <div className="absolute top-28 left-3 right-3 z-[999] rounded-lg bg-white/95 p-3 text-sm text-slate-700 shadow md:hidden" role="status">{locationMessage}</div>}
           {selectedCity.status === 'active' ? (
             <MapView
               vehicles={filteredVehicles}
@@ -338,7 +343,6 @@ function App() {
               onVehicleClick={setSelectedVehicle}
               onStopClick={(stop) => {
                 setSelectedStop(stop);
-                setSelectedStopCityId(stop.cityId || selectedCity.id);
               }}
             />
           ) : (
@@ -376,7 +380,7 @@ function App() {
             <div className="flex justify-between items-start mb-3">
               <div>
                 <div className="text-xl font-bold text-primary">{selectedStop.name}</div>
-                <div className="mt-1 text-sm text-gray-500">{selectedStop.mode === 'train' ? 'Vlak' : 'Autobus ili tramvaj'}{nearestDistance !== null && selectedStop === nearbyStops.find(stop => stop.id === selectedStop.id) ? ` · ${nearestDistance < 1000 ? `${nearestDistance} m od vas` : `${(nearestDistance / 1000).toFixed(1)} km od vas`}` : ''}</div>
+                <div className="mt-1 text-sm text-gray-500">Stanica autobusa ili tramvaja{nearestDistance !== null && selectedStop === nearbyStops.find(stop => stop.id === selectedStop.id) ? ` · ${nearestDistance < 1000 ? `${nearestDistance} m od vas` : `${(nearestDistance / 1000).toFixed(1)} km od vas`}` : ''}</div>
                 {selectedStop.code && (
                   <div className="text-sm text-gray-500">Kod: {selectedStop.code}</div>
                 )}
@@ -404,7 +408,7 @@ function App() {
 
       {showSchedule && (
         <SchedulePanel
-          cityId={selectedStopCityId || selectedCity.id}
+          cityId={selectedCity.id}
           initialStopId={selectedStop?.id}
           onClose={() => setShowSchedule(false)}
         />

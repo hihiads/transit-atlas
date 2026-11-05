@@ -55,11 +55,12 @@ export interface AuthError {
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
+  const data = await response.json().catch(() => null) as (AuthError & T) | null;
   if (!response.ok) {
-    const error = await response.json() as AuthError;
-    throw new Error(error.error || 'Greška pri zahtjevu');
+    throw new Error(data?.error || `Zahtjev nije uspio (${response.status}).`);
   }
-  return response.json();
+  if (!data) throw new Error('Server je poslao neispravan odgovor. Pokušajte ponovno.');
+  return data;
 }
 
 export async function register(email: string, password: string, turnstileToken: string): Promise<AuthResponse> {
@@ -73,12 +74,21 @@ export async function register(email: string, password: string, turnstileToken: 
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ email, password })
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email: email.trim(), password }),
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error('Server ne odgovara. Pokušajte ponovno za trenutak.');
+    }
+    throw new Error('Ne mogu se povezati sa serverom. Provjerite vezu pa pokušajte ponovno.');
+  }
   return handleResponse<AuthResponse>(response);
 }
 

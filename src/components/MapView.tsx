@@ -112,7 +112,7 @@ export default function MapView({
           <Popup>
             <div className="p-2">
               <div className="font-bold text-sm">{stop.name}</div>
-              <div className="text-xs text-gray-500">{stop.mode === 'train' ? 'Vlak' : 'Autobus / tramvaj'}</div>
+              <div className="text-xs text-gray-500">Stanica ZET-a</div>
               {stop.code && (
                 <div className="text-xs text-gray-500">Kod: {stop.code}</div>
               )}

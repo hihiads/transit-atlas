@@ -1,10 +1,6 @@
-import { City } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 interface HeaderProps {
-  cities: City[];
-  selectedCity: City;
-  onCityChange: (city: City) => void;
   vehicleCount: number;
   totalVehicles: number;
   dataStatus: 'demo' | 'live' | 'unavailable';
@@ -14,9 +10,6 @@ interface HeaderProps {
 }
 
 export default function Header({
-  cities,
-  selectedCity,
-  onCityChange,
   vehicleCount,
   totalVehicles,
   dataStatus,
@@ -58,26 +51,8 @@ export default function Header({
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <label className="text-xs sm:text-sm text-gray-300 whitespace-nowrap">Grad:</label>
-              <select
-                value={selectedCity.id}
-                onChange={(e) => {
-                  const city = cities.find(c => c.id === e.target.value);
-                  if (city) onCityChange(city);
-                }}
-                className="flex-1 sm:flex-initial bg-slate-700 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
-              >
-                {cities.map(city => (
-                  <option key={city.id} value={city.id}>
-                    {city.name} {city.status === 'coming_soon' && '(Uskoro)'}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedCity.hasRealtime && <div className="text-xs sm:text-sm w-full sm:w-auto">
+          <div className="flex items-center gap-4">
+            <div className="text-xs sm:text-sm">
               <div className="text-gray-300">
                 Prikazano: <span className="font-bold text-white">{vehicleCount}</span> / {totalVehicles}
               </div>
@@ -90,10 +65,7 @@ export default function Header({
               {dataStatus === 'unavailable' && (
                 <div className="text-xs text-amber-300">Live feed nedostupan</div>
               )}
-            </div>}
-            {!selectedCity.hasRealtime && (
-              <div className="text-xs text-emerald-300">Planirani polasci</div>
-            )}
+            </div>
           </div>
         </div>
       </div>

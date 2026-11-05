@@ -25,14 +25,13 @@ export interface Stop {
   code?: string | null;
   wheelchairAccessible?: boolean;
   cityId?: string;
-  mode?: 'bus-tram' | 'train';
 }
 
 export interface Route {
   id: string;
   shortName: string;
   longName: string;
-  type: 'bus' | 'tram' | 'train';
+  type: 'bus' | 'tram';
   color?: string | null;
   textColor?: string | null;
 }
@@ -59,7 +58,7 @@ export interface City {
   zoom: number;
   status: 'active' | 'coming_soon' | 'unavailable';
   hasRealtime: boolean;
-  supportedTypes: ('bus' | 'tram' | 'train')[];
+  supportedTypes: ('bus' | 'tram')[];
 }
 
 export interface VehicleResponse {

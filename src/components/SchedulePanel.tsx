@@ -199,14 +199,14 @@ export default function SchedulePanel({ cityId, initialStopId, onClose }: Schedu
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${
-                      route.type === 'train' ? 'bg-emerald-700' : route.type === 'bus' ? 'bg-blue-600' : 'bg-red-600'
+                      route.type === 'bus' ? 'bg-blue-600' : 'bg-red-600'
                     }`}>
                       {route.shortName}
                     </div>
                     <div className="flex-1">
                       <div className="font-medium">{route.longName}</div>
                       <div className="text-sm text-gray-500">
-                        {route.type === 'train' ? 'Vlak' : route.type === 'bus' ? 'Autobus' : 'Tramvaj'}
+                        {route.type === 'bus' ? 'Autobus' : 'Tramvaj'}
                       </div>
                     </div>
                   </div>

@@ -6,6 +6,7 @@ interface FilterPanelProps {
   selectedLine: string;
   onTypeChange: (type: 'all' | 'bus' | 'tram') => void;
   onLineChange: (line: string) => void;
+  compact?: boolean;
 }
 
 export default function FilterPanel({
@@ -13,7 +14,8 @@ export default function FilterPanel({
   selectedType,
   selectedLine,
   onTypeChange,
-  onLineChange
+  onLineChange,
+  compact = false
 }: FilterPanelProps) {
   const lines = Array.from(new Set(vehicles.map(v => v.line))).sort((a, b) => {
     const aNum = parseInt(a);
@@ -21,6 +23,32 @@ export default function FilterPanel({
     if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
     return a.localeCompare(b);
   });
+
+  if (compact) {
+    return (
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2 rounded-xl bg-white/95 p-2 shadow-lg backdrop-blur">
+        <select
+          aria-label="Vrsta vozila"
+          value={selectedType}
+          onChange={(event) => onTypeChange(event.target.value as 'all' | 'bus' | 'tram')}
+          className="min-w-0 rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm text-gray-800"
+        >
+          <option value="all">Sva vozila</option>
+          <option value="bus">Autobusi</option>
+          <option value="tram">Tramvaji</option>
+        </select>
+        <select
+          aria-label="Filtriraj po liniji"
+          value={selectedLine}
+          onChange={(event) => onLineChange(event.target.value)}
+          className="min-w-0 rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm text-gray-800"
+        >
+          <option value="">Sve linije</option>
+          {lines.map(line => <option key={line} value={line}>Linija {line}</option>)}
+        </select>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white shadow-lg rounded-lg p-4 mb-4 md:mb-0">
