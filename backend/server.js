@@ -8,6 +8,7 @@ import AdmZip from 'adm-zip';
 import { createReadStream, existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { parse } from 'csv-parse/sync';
+import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import { apiLimiter, authLimiter, heavyLimiter } from './middleware/security.js';
@@ -92,6 +93,8 @@ let gtfsData = {
   stops: [],
   trips: [],
   stopTimes: [],
+  stopTimesByStop: new Map(),
+  stopTimeCount: 0,
   calendar: [],
   calendarDates: [],
   shapes: [],
@@ -126,6 +129,58 @@ function parseGtfsCsv(csvText) {
     console.error('CSV parse error:', err.message);
     return [];
   }
+}
+
+async function indexGtfsStopTimes(filePath, trips) {
+  const tripIndexes = new Map(trips.map((trip, index) => [String(trip.trip_id), index]));
+  const grouped = new Map();
+  let count = 0;
+  const parser = createReadStream(filePath).pipe(parseStream({
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+    relax_quotes: true
+  }));
+
+  for await (const row of parser) {
+    const tripIndex = tripIndexes.get(String(row.trip_id));
+    if (tripIndex === undefined || !row.stop_id || !row.departure_time) continue;
+    const [hour, minute, second] = String(row.departure_time).split(':').map(Number);
+    if (![hour, minute, second].every(Number.isFinite)) continue;
+    let entries = grouped.get(String(row.stop_id));
+    if (!entries) grouped.set(String(row.stop_id), entries = []);
+    entries.push(tripIndex, hour * 3600 + minute * 60 + second);
+    count++;
+  }
+
+  return {
+    byStop: new Map([...grouped].map(([stopId, entries]) => [stopId, Uint32Array.from(entries)])),
+    count
+  };
+}
+
+function* stopTimesForStop(data, stopId) {
+  if (data.stopTimesByStop instanceof Map) {
+    const entries = data.stopTimesByStop.get(stopId) || [];
+    for (let index = 0; index < entries.length; index += 2) {
+      const seconds = entries[index + 1];
+      const hour = Math.floor(seconds / 3600);
+      const minute = Math.floor((seconds % 3600) / 60);
+      const second = seconds % 60;
+      yield {
+        trip_id: data.trips[entries[index]]?.trip_id,
+        departure_time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`
+      };
+    }
+    return;
+  }
+  for (const row of data.stopTimes) {
+    if (String(row.stop_id) === stopId) yield row;
+  }
+}
+
+function stopTimeCount(data) {
+  return data.stopTimesByStop instanceof Map ? data.stopTimeCount : data.stopTimes.length;
 }
 
 // Preuzmi i parsiraj GTFS Static podatke
@@ -168,9 +223,16 @@ async function loadGtfsData() {
     for (const [filename, key] of Object.entries(files)) {
       const filePath = join(dataDir, filename);
       if (existsSync(filePath)) {
-        const content = readFileSync(filePath, 'utf-8');
-        gtfsData[key] = parseGtfsCsv(content);
-        console.log(`[GTFS Static] ✓ ${filename}: ${gtfsData[key].length} zapisa`);
+        if (key === 'stopTimes') {
+          const indexed = await indexGtfsStopTimes(filePath, gtfsData.trips);
+          gtfsData.stopTimesByStop = indexed.byStop;
+          gtfsData.stopTimeCount = indexed.count;
+          console.log(`[GTFS Static] ✓ ${filename}: ${indexed.count} zapisa indeksirana po stanicama`);
+        } else {
+          const content = readFileSync(filePath, 'utf-8');
+          gtfsData[key] = parseGtfsCsv(content);
+          console.log(`[GTFS Static] ✓ ${filename}: ${gtfsData[key].length} zapisa`);
+        }
       } else {
         console.warn(`[GTFS Static] ⚠ ${filename} ne postoji`);
       }
@@ -495,8 +557,8 @@ app.get('/api/:cityId/stop/:stopId/departures', (req, res) => {
   const tripsById = new Map(data.trips.map(t => [String(t.trip_id), t]));
   const routesById = new Map(data.routes.map(r => [String(r.route_id), r]));
   const departures = [];
-  for (const st of data.stopTimes) {
-    if (String(st.stop_id) !== stopId || !st.departure_time) continue;
+  for (const st of stopTimesForStop(data, stopId)) {
+    if (!st.departure_time) continue;
     const trip = tripsById.get(String(st.trip_id));
     if (!trip) continue;
     const [rawHour, minute, second] = String(st.departure_time).split(':').map(Number);
@@ -547,9 +609,9 @@ app.get('/api/system/status', (req, res) => {
       routes: gtfsData.routes.length,
       stops: gtfsData.stops.length,
       trips: gtfsData.trips.length,
-      stopTimes: gtfsData.stopTimes.length
+      stopTimes: stopTimeCount(gtfsData)
     },
-    statsBeograd: { routes: beogradData.routes.length, stops: beogradData.stops.length, trips: beogradData.trips.length, stopTimes: beogradData.stopTimes.length },
+    statsBeograd: { routes: beogradData.routes.length, stops: beogradData.stops.length, trips: beogradData.trips.length, stopTimes: stopTimeCount(beogradData) },
     sources: {
       static: 'https://www.zet.hr/gtfs-scheduled/latest',
       realtime: 'https://www.zet.hr/gtfs-rt-protobuf',
