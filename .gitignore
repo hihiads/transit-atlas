@@ -1,0 +1,11 @@
+node_modules
+dist
+gtfs_data
+.env*
+!.env.example
+*.log
+*.backup.js
+.claude/settings.local.json
+.claude/
+backend/data/
+.DS_Store
