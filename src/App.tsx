@@ -124,18 +124,10 @@ function App() {
     // Učitaj stanice
     api.getStops(selectedCity.id)
       .then(response => {
-        const cityStops = response.stops.map(stop => ({ ...stop, cityId: selectedCity.id, mode: selectedCity.id === 'hzpp' ? 'train' as const : 'bus-tram' as const }));
+        const cityStops = response.stops.map(stop => ({ ...stop, cityId: selectedCity.id, mode: 'bus-tram' as const }));
         if (cancelled) return;
         setStops(cityStops);
         setNearbyStops(cityStops);
-        if (selectedCity.id === 'zagreb') {
-          api.getStops('hzpp').then(rail => {
-            if (cancelled) return;
-            const trainStops = rail.stops.map(stop => ({ ...stop, cityId: 'hzpp', mode: 'train' as const }));
-            setNearbyStops(current => [...current, ...trainStops]);
-            setStops(current => [...current, ...trainStops]);
-          }).catch(() => {});
-        }
       })
       .catch(() => {
         setStops([]);
@@ -312,15 +304,6 @@ function App() {
             <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">
               <strong>✓ Podaci uživo</strong><br />
               Prikazuju se lokacije koje šalje ZET.
-            </div>
-          )}
-
-          {dataStatus === 'unavailable' && selectedCity.id !== 'zagreb' && (
-            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
-              <strong>{selectedCity.id === 'beograd' ? 'Raspored polazaka' : 'Vlakovi HŽPP-a'}</strong><br />
-              {selectedCity.id === 'beograd'
-                ? 'Prikazujemo linije i planirana vremena polazaka. Lokacije vozila trenutačno nisu dostupne.'
-                : 'Prikazujemo stanice i planirana vremena polazaka. Lokacije vlakova i kašnjenja trenutačno nisu dostupni.'}
             </div>
           )}
 

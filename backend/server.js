@@ -319,17 +319,13 @@ async function loadBeogradData() {
 }
 
 // Učitavaj feedove jedan po jedan kako se veliki stop_times CSV-ovi ne bi parsirali istodobno.
-async function loadAllGtfsData() {
+async function loadZagrebData() {
   await loadGtfsData();
-  await loadHzppData();
-  await loadBeogradData();
 }
-loadAllGtfsData();
+loadZagrebData();
 
 // Osvježi GTFS podatke svakih 24h
 setInterval(loadGtfsData, 24 * 60 * 60 * 1000);
-setInterval(loadHzppData, 24 * 60 * 60 * 1000);
-setInterval(loadBeogradData, 24 * 60 * 60 * 1000);
 
 // Dohvati GTFS-Realtime vozila
 async function fetchRealtimeVehicles() {
@@ -426,12 +422,6 @@ app.get('/api/cities', (req, res) => {
     status: 'active',
     hasRealtime: true,
     supportedTypes: ['bus', 'tram']
-  }, {
-    id: 'hzpp', name: 'Hrvatska', operator: 'HŽPP', center: [45.2, 16.2], zoom: 7,
-    status: 'active', hasRealtime: false, supportedTypes: ['train']
-  }, {
-    id: 'beograd', name: 'Beograd', operator: 'Sekretarijat za javni prevoz', center: [44.8125, 20.4612], zoom: 12,
-    status: 'active', hasRealtime: false, supportedTypes: ['bus', 'tram']
   }]);
 });
 

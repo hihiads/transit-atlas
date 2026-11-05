@@ -5,7 +5,7 @@ Transit Atlas je interaktivna karta javnog prijevoza s potpunom autentifikacijom
 ## 🚀 Funkcionalnosti
 
 ### Javne funkcionalnosti (bez prijave)
-- ✅ Interaktivna karta javnog prijevoza (Zagreb, HŽPP, Beograd)
+- ✅ Interaktivna karta javnog prijevoza Zagreba
 - ✅ GTFS-Realtime prikaz vozila uživo (Zagreb)
 - ✅ Statički vozni red iz GTFS podataka
 - ✅ Pregled stanica i trasa linija
