@@ -20,7 +20,7 @@ services:
       - key: ADMIN_PANEL_PASSWORD
         sync: false
       - key: APP_ORIGIN
-        sync: false
+        value: https://transit-atlas.onrender.com
       - key: TURNSTILE_SITE_KEY
         sync: false
       - key: TURNSTILE_SECRET_KEY

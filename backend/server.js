@@ -19,6 +19,7 @@ import { getAllowedOrigins, isAllowedOrigin } from './config/origins.js';
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const isProduction = process.env.NODE_ENV === 'production';
+const publicUrl = process.env.RENDER_EXTERNAL_URL || (isProduction ? 'https://transit-atlas.onrender.com' : `http://localhost:${PORT}`);
 
 await loadRuntimeSettings();
 if (!process.env.ADMIN_PANEL_PASSWORD || process.env.ADMIN_PANEL_PASSWORD.length < 16) {
@@ -584,13 +585,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Interna greška servera' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('═══════════════════════════════════════════════════════════');
   console.log('  Transit Atlas Backend');
   console.log('═══════════════════════════════════════════════════════════');
   console.log('');
-  console.log(`  Server: http://localhost:${PORT}`);
+  console.log(`  Server: ${publicUrl}`);
   console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log('');
   console.log('  GTFS Izvori:');
