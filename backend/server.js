@@ -370,7 +370,7 @@ async function fetchRealtimeVehicles() {
 
         let route = null;
         let trip = null;
-        if (vehicle.trip?.routeId && gtfsLoaded) {
+        if (vehicle.trip?.routeId && gtfsData.routes.length && gtfsData.trips.length) {
           route = gtfsData.routes.find(r => r.route_id === vehicle.trip.routeId);
           trip = gtfsData.trips.find(t => t.trip_id === vehicle.trip?.tripId);
         }
