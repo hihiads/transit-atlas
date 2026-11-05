@@ -100,15 +100,17 @@ let gtfsData = {
   shapes: [],
   agency: []
 };
-const hzppData = { routes: [], stops: [], trips: [], stopTimes: [], calendar: [], calendarDates: [] };
+const hzppData = { routes: [], stops: [], trips: [], stopTimes: [], stopTimesByStop: new Map(), stopTimeCount: 0, calendar: [], calendarDates: [] };
 let hzppLoaded = false;
 let hzppLastUpdate = null;
-const beogradData = { routes: [], stops: [], trips: [], stopTimes: [], calendar: [], calendarDates: [], shapes: [], agency: [] };
+const beogradData = { routes: [], stops: [], trips: [], stopTimes: [], stopTimesByStop: new Map(), stopTimeCount: 0, calendar: [], calendarDates: [], shapes: [], agency: [] };
 let beogradLoaded = false;
 let beogradLastUpdate = null;
 
 let lastGtfsUpdate = null;
 let gtfsLoaded = false;
+let gtfsLoadError = null;
+let gtfsLoadInProgress = false;
 let rtFeedStatus = 'unknown';
 
 // Helper funkcija za parsiranje GTFS CSV
@@ -151,6 +153,7 @@ async function indexGtfsStopTimes(filePath, trips) {
     if (!entries) grouped.set(String(row.stop_id), entries = []);
     entries.push(tripIndex, hour * 3600 + minute * 60 + second);
     count++;
+    if (count % 250000 === 0) console.log(`[GTFS Static] stop_times: indeksirano ${count} redaka`);
   }
 
   return {
@@ -185,6 +188,8 @@ function stopTimeCount(data) {
 
 // Preuzmi i parsiraj GTFS Static podatke
 async function loadGtfsData() {
+  if (gtfsLoadInProgress) return;
+  gtfsLoadInProgress = true;
   const gtfsUrl = 'https://www.zet.hr/gtfs-scheduled/latest';
   const dataDir = join(process.cwd(), 'gtfs_data');
 
@@ -224,6 +229,7 @@ async function loadGtfsData() {
       const filePath = join(dataDir, filename);
       if (existsSync(filePath)) {
         if (key === 'stopTimes') {
+          console.log(`[GTFS Static] Streaming ${filename} (${gtfsData.trips.length} putovanja u indeksu)...`);
           const indexed = await indexGtfsStopTimes(filePath, gtfsData.trips);
           gtfsData.stopTimesByStop = indexed.byStop;
           gtfsData.stopTimeCount = indexed.count;
@@ -240,11 +246,15 @@ async function loadGtfsData() {
 
     lastGtfsUpdate = new Date();
     gtfsLoaded = true;
+    gtfsLoadError = null;
     console.log(`[GTFS Static] ✓ Podaci uspješno učitani: ${gtfsData.routes.length} linija, ${gtfsData.stops.length} stanica`);
 
   } catch (error) {
     console.error(`[GTFS Static] ✗ Greška: ${error.message}`);
+    gtfsLoadError = error.message;
     gtfsLoaded = false;
+  } finally {
+    gtfsLoadInProgress = false;
   }
 }
 
@@ -260,7 +270,14 @@ async function loadHzppData() {
     new AdmZip(zipPath).extractAllTo(dir, true);
     for (const [file, key] of Object.entries({ 'routes.txt':'routes', 'stops.txt':'stops', 'trips.txt':'trips', 'stop_times.txt':'stopTimes', 'calendar.txt':'calendar', 'calendar_dates.txt':'calendarDates' })) {
       const path = join(dir, file);
-      if (existsSync(path)) hzppData[key] = parseGtfsCsv(readFileSync(path, 'utf8'));
+      if (!existsSync(path)) continue;
+      if (key === 'stopTimes') {
+        const indexed = await indexGtfsStopTimes(path, hzppData.trips);
+        hzppData.stopTimesByStop = indexed.byStop;
+        hzppData.stopTimeCount = indexed.count;
+      } else {
+        hzppData[key] = parseGtfsCsv(readFileSync(path, 'utf8'));
+      }
     }
     hzppLoaded = hzppData.stops.length > 0 && hzppData.trips.length > 0;
     hzppLastUpdate = new Date();
@@ -283,7 +300,14 @@ async function loadBeogradData() {
     new AdmZip(zipPath).extractAllTo(dir, true);
     for (const [file, key] of Object.entries({ 'routes.txt':'routes', 'stops.txt':'stops', 'trips.txt':'trips', 'stop_times.txt':'stopTimes', 'calendar.txt':'calendar', 'calendar_dates.txt':'calendarDates', 'shapes.txt':'shapes', 'agency.txt':'agency' })) {
       const path = join(dir, file);
-      if (existsSync(path)) beogradData[key] = parseGtfsCsv(readFileSync(path, 'utf8'));
+      if (!existsSync(path)) continue;
+      if (key === 'stopTimes') {
+        const indexed = await indexGtfsStopTimes(path, beogradData.trips);
+        beogradData.stopTimesByStop = indexed.byStop;
+        beogradData.stopTimeCount = indexed.count;
+      } else {
+        beogradData[key] = parseGtfsCsv(readFileSync(path, 'utf8'));
+      }
     }
     beogradLoaded = beogradData.routes.length > 0 && beogradData.stops.length > 0 && beogradData.trips.length > 0;
     beogradLastUpdate = new Date();
@@ -294,10 +318,13 @@ async function loadBeogradData() {
   }
 }
 
-// Inicijalno učitavanje GTFS podataka
-loadGtfsData();
-loadHzppData();
-loadBeogradData();
+// Učitavaj feedove jedan po jedan kako se veliki stop_times CSV-ovi ne bi parsirali istodobno.
+async function loadAllGtfsData() {
+  await loadGtfsData();
+  await loadHzppData();
+  await loadBeogradData();
+}
+loadAllGtfsData();
 
 // Osvježi GTFS podatke svakih 24h
 setInterval(loadGtfsData, 24 * 60 * 60 * 1000);
@@ -599,6 +626,7 @@ app.get('/api/:cityId/stop/:stopId/departures', (req, res) => {
 app.get('/api/system/status', (req, res) => {
   res.json({
     gtfsLoaded,
+    gtfsLoadError,
     hzppLoaded,
     hzppLastUpdate,
     beogradLoaded,
