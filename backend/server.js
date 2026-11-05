@@ -30,10 +30,9 @@ if (isAuthenticationEnabled()) {
   await activateAuthentication();
 }
 
-// Trust proxy - samo za poznate proxy layere (postaviti prema hosting provideru)
-// Primjer: ako je hosting iza 1 proxy layera, koristiti app.set('trust proxy', 1);
-if (isProduction && process.env.TRUST_PROXY_HOPS) {
-  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
+// Render terminates TLS in front of the app and forwards the client's IP.
+if (isProduction) {
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
 }
 
 // Sigurnosni headeri
