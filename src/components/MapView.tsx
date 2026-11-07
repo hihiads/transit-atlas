@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
-import { Vehicle, Stop, TransitShape } from '../types';
+import { Vehicle, Stop, TransitShape, SchoolRoutePlan } from '../types';
 
 // Ikone za različite tipove vozila
 const busIcon = L.divIcon({
@@ -37,6 +37,7 @@ interface MapViewProps {
   userLocation?: [number, number];
   onVehicleClick: (vehicle: Vehicle) => void;
   onStopClick: (stop: Stop) => void;
+  schoolPlan?: SchoolRoutePlan | null;
 }
 
 function MapController({ center, zoom }: { center: [number, number]; zoom: number }) {
@@ -59,7 +60,8 @@ export default function MapView({
   showShapes,
   userLocation,
   onVehicleClick,
-  onStopClick
+  onStopClick,
+  schoolPlan
 }: MapViewProps) {
   const formatLastUpdate = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -92,6 +94,12 @@ export default function MapView({
           pathOptions={{ color: shape.color ? `#${shape.color}` : '#2563eb', weight: 3, opacity: 0.5 }}
         />
       ))}
+
+      {schoolPlan?.shapeId && shapes.filter(shape => shape.id === schoolPlan.shapeId).map(shape => <Polyline key={`school-${shape.id}`} positions={shape.coordinates} pathOptions={{ color: '#f97316', weight: 6, opacity: 0.9 }} />)}
+      {schoolPlan && <>
+        <CircleMarker center={[Number(schoolPlan.from.stop_lat), Number(schoolPlan.from.stop_lon)]} radius={7} pathOptions={{ color: '#fff', weight: 2, fillColor: '#f97316', fillOpacity: 1 }} />
+        <CircleMarker center={[Number(schoolPlan.to.stop_lat), Number(schoolPlan.to.stop_lon)]} radius={7} pathOptions={{ color: '#fff', weight: 2, fillColor: '#f97316', fillOpacity: 1 }} />
+      </>}
 
       {/* Stanice */}
       {showStops && stops.map((stop) => (

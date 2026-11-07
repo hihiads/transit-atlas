@@ -186,6 +186,175 @@ function stopTimeCount(data) {
   return data.stopTimesByStop instanceof Map ? data.stopTimeCount : data.stopTimes.length;
 }
 
+function dayNumber(date) {
+  const [year, month, day] = date.split('-').map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+}
+
+function dayString(number) {
+  return new Date(number * 86400000).toISOString().slice(0, 10);
+}
+
+function localMinute(value) {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(String(value || ''));
+  if (!match) return null;
+  const day = dayNumber(match[1]);
+  const hour = Number(match[2]);
+  const minute = Number(match[3]);
+  if (hour > 23 || minute > 59) return null;
+  return day * 1440 + hour * 60 + minute;
+}
+
+function zagrebNowMinute() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Zagreb', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return dayNumber(`${values.year}-${values.month}-${values.day}`) * 1440 + Number(values.hour) * 60 + Number(values.minute);
+}
+
+function formatLocalMinute(value) {
+  const date = dayString(Math.floor(value / 1440));
+  const minuteOfDay = ((value % 1440) + 1440) % 1440;
+  return `${date}T${String(Math.floor(minuteOfDay / 60)).padStart(2, '0')}:${String(minuteOfDay % 60).padStart(2, '0')}`;
+}
+
+function activeServicesOn(day) {
+  const date = dayString(day);
+  const dateKey = date.replaceAll('-', '');
+  const weekday = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date(day * 86400000).getUTCDay()];
+  const active = new Set(gtfsData.calendar
+    .filter(service => dateKey >= String(service.start_date) && dateKey <= String(service.end_date) && String(service[weekday]) === '1')
+    .map(service => String(service.service_id)));
+  for (const exception of gtfsData.calendarDates) {
+    if (String(exception.date) !== dateKey) continue;
+    if (String(exception.exception_type) === '1') active.add(String(exception.service_id));
+    else active.delete(String(exception.service_id));
+  }
+  return active;
+}
+
+function distanceMeters(a, b) {
+  const radians = value => value * Math.PI / 180;
+  const lat = radians(b.lat - a.lat);
+  const lon = radians(b.lon - a.lon);
+  const h = Math.sin(lat / 2) ** 2 + Math.cos(radians(a.lat)) * Math.cos(radians(b.lat)) * Math.sin(lon / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function closestStops(point, radius = 1200, limit = 12) {
+  return gtfsData.stops.map(stop => {
+    const candidate = { lat: Number(stop.stop_lat), lon: Number(stop.stop_lon) };
+    return { stop, distance: distanceMeters(point, candidate) };
+  }).filter(item => Number.isFinite(item.distance) && item.distance <= radius)
+    .sort((a, b) => a.distance - b.distance).slice(0, limit);
+}
+
+function tripPatternsFor(tripIndexes) {
+  const patterns = new Map();
+  if (!tripIndexes.size) return patterns;
+  for (const [stopId, entries] of gtfsData.stopTimesByStop) {
+    for (let index = 0; index < entries.length; index += 2) {
+      const tripIndex = entries[index];
+      if (!tripIndexes.has(tripIndex)) continue;
+      let pattern = patterns.get(tripIndex);
+      if (!pattern) patterns.set(tripIndex, pattern = []);
+      pattern.push({ stopId, seconds: entries[index + 1] });
+    }
+  }
+  for (const pattern of patterns.values()) pattern.sort((a, b) => a.seconds - b.seconds);
+  return patterns;
+}
+
+const schoolGeocodeCache = new Map();
+let lastSchoolGeocodeAt = 0;
+
+app.get('/api/schoolroute/search', heavyLimiter, async (req, res) => {
+  const query = String(req.query.q || '').trim().slice(0, 160);
+  if (query.length < 3) return res.status(400).json({ error: 'Unesite barem 3 znaka.' });
+  const cacheKey = query.toLowerCase();
+  if (schoolGeocodeCache.has(cacheKey)) return res.json(schoolGeocodeCache.get(cacheKey));
+  try {
+    const wait = Math.max(0, 1000 - (Date.now() - lastSchoolGeocodeAt));
+    if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+    lastSchoolGeocodeAt = Date.now();
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', `${query}, Zagreb, Croatia`);
+    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('limit', '5');
+    url.searchParams.set('countrycodes', 'hr');
+    const response = await fetch(url, { headers: { 'User-Agent': 'TransitAtlas/1.0 (school route planner)' }, signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error(`Geocoding HTTP ${response.status}`);
+    const raw = await response.json();
+    const results = raw.map(item => ({ id: String(item.place_id), name: String(item.display_name), lat: Number(item.lat), lon: Number(item.lon) }));
+    schoolGeocodeCache.set(cacheKey, results);
+    if (schoolGeocodeCache.size > 200) schoolGeocodeCache.delete(schoolGeocodeCache.keys().next().value);
+    res.json(results);
+  } catch (error) {
+    res.status(502).json({ error: 'Pretraga adrese trenutačno nije dostupna.' });
+  }
+});
+
+app.post('/api/schoolroute/plan', heavyLimiter, (req, res) => {
+  if (!gtfsLoaded) return res.status(503).json({ error: 'ZET vozni red trenutačno nije učitan.' });
+  const { origin, destination, arriveBy, mode } = req.body || {};
+  const validPoint = point => point && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)) && Math.abs(Number(point.lat)) <= 90 && Math.abs(Number(point.lon)) <= 180;
+  const deadline = localMinute(arriveBy);
+  if (!validPoint(origin) || !validPoint(destination) || deadline === null || !['arrive', 'fastest'].includes(mode)) return res.status(400).json({ error: 'Podaci za planiranje nisu valjani.' });
+  const now = zagrebNowMinute();
+  const day = Math.floor(now / 1440);
+  const services = new Map([day, day + 1].map(value => [value, activeServicesOn(value)]));
+  const originStops = closestStops({ lat: Number(origin.lat), lon: Number(origin.lon) }, 1800, 18);
+  const destinationStops = closestStops({ lat: Number(destination.lat), lon: Number(destination.lon) }, 1800, 18);
+  const tripByIndex = gtfsData.trips;
+  const tripIndexes = new Set();
+  for (const { stop } of originStops) {
+    const entries = gtfsData.stopTimesByStop.get(String(stop.stop_id));
+    if (!entries) continue;
+    for (let i = 0; i < entries.length; i += 2) tripIndexes.add(entries[i]);
+  }
+  const patterns = tripPatternsFor(tripIndexes);
+  const stopById = new Map(gtfsData.stops.map(stop => [String(stop.stop_id), stop]));
+  const routeById = new Map(gtfsData.routes.map(route => [String(route.route_id), route]));
+  const destinationIds = new Set(destinationStops.map(item => String(item.stop.stop_id)));
+  const walkingMinutes = meters => Math.ceil(meters / 75);
+  const options = [];
+  for (const [index, pattern] of patterns) {
+    const trip = tripByIndex[index];
+    if (!trip) continue;
+    const route = routeById.get(String(trip.route_id));
+    const patternStops = pattern.map(item => ({ ...item, stop: stopById.get(item.stopId) })).filter(item => item.stop);
+    for (let i = 0; i < patternStops.length; i++) {
+      const from = patternStops[i];
+      const originCandidate = originStops.find(item => String(item.stop.stop_id) === from.stopId);
+      if (!originCandidate) continue;
+      for (let j = i + 1; j < patternStops.length; j++) {
+        const to = patternStops[j];
+        if (!destinationIds.has(to.stopId)) continue;
+        const destinationCandidate = destinationStops.find(item => String(item.stop.stop_id) === to.stopId);
+        if (!destinationCandidate) continue;
+        const serviceDay = Math.floor((day * 1440 + Math.floor(from.seconds / 60)) / 1440);
+        if (!services.get(serviceDay)?.has(String(trip.service_id))) continue;
+        const adjustedStart = serviceDay * 1440 + Math.floor(from.seconds / 60) - walkingMinutes(originCandidate.distance);
+        const adjustedEnd = serviceDay * 1440 + Math.floor(to.seconds / 60) + walkingMinutes(destinationCandidate.distance);
+        if (adjustedStart < now || adjustedEnd > deadline || adjustedEnd - adjustedStart > 150) continue;
+        options.push({
+          leaveAt: formatLocalMinute(adjustedStart), arriveAt: formatLocalMinute(adjustedEnd),
+          from: from.stop, to: to.stop, route: route?.route_short_name || 'Linija',
+          headsign: trip.trip_headsign || '', shapeId: trip.shape_id ? String(trip.shape_id) : null,
+          walkTo: walkingMinutes(originCandidate.distance), walkFrom: walkingMinutes(destinationCandidate.distance),
+          walkToMeters: Math.round(originCandidate.distance), walkFromMeters: Math.round(destinationCandidate.distance)
+        });
+      }
+    }
+  }
+  options.sort((a, b) => mode === 'fastest' ? a.arriveAt.localeCompare(b.arriveAt) : b.leaveAt.localeCompare(a.leaveAt));
+  const plan = options[0];
+  if (!plan) return res.json({ plan: null, message: 'Nema pronađene direktne vožnje u rasporedu za odabrano vrijeme i obližnje stanice.' });
+  res.json({ plan, source: 'ZET GTFS raspored', mode, note: 'Polasci su iz rasporeda. Pješačko vrijeme je procjena; kašnjenja uživo nisu uključena.' });
+});
+
 // Preuzmi i parsiraj GTFS Static podatke
 async function loadGtfsData() {
   if (gtfsLoadInProgress) return;

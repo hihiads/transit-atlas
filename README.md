@@ -9,6 +9,7 @@ Transit Atlas je interaktivna karta javnog prijevoza s potpunom autentifikacijom
 - ✅ GTFS-Realtime prikaz vozila uživo (Zagreb)
 - ✅ Statički vozni red iz GTFS podataka
 - ✅ Pregled stanica i trasa linija
+- ✅ „Do škole” planer za Zagreb: lokacija nakon klika, ručna pretraga odredišta, dolazak do zadanog vremena i najbrža direktna veza
 - ✅ Mobilno responzivno sučelje
 
 ### Korisnički računi
@@ -125,6 +126,10 @@ Aplikacija će biti dostupna na:
 - API: http://localhost:3001/api
 
 ## 🌐 Produkcijski deployment
+
+### Planer „Do škole”
+
+Planer koristi već učitane ZET GTFS Static rasporede i stanice za pronalazak direktne vožnje između obližnjih stanica. Vrijeme hodanja je gruba procjena udaljenosti, a kašnjenja vozila uživo nisu uračunata. Presjedanja i navigacija pješačkom mrežom još nisu podržani; kada nema odgovarajuće direktne vožnje, sučelje to jasno kaže. Pretraga odredišta šalje upit tek nakon korisnikova klika preko OpenStreetMap Nominatim; lokacija uređaja traži se samo nakon klika na „Moja lokacija”.
 
 ### Jedna .env datoteka za SVE
 

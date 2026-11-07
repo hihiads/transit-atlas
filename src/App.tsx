@@ -4,9 +4,10 @@ import Header from './components/Header';
 import FilterPanel from './components/FilterPanel';
 import VehicleCard from './components/VehicleCard';
 import SchedulePanel from './components/SchedulePanel';
+import SchoolRoutePanel from './components/SchoolRoutePanel';
 import AuthModal from './components/Auth/AuthModal';
 import { api, AuthStatus } from './api';
-import { Vehicle, City, Stop, TransitShape } from './types';
+import { Vehicle, City, Stop, TransitShape, SchoolRoutePlan } from './types';
 
 function App() {
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
@@ -17,6 +18,8 @@ function App() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [showSchoolRoute, setShowSchoolRoute] = useState(false);
+  const [schoolPlan, setSchoolPlan] = useState<SchoolRoutePlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataStatus, setDataStatus] = useState<'demo' | 'live' | 'unavailable'>('demo');
@@ -259,6 +262,12 @@ function App() {
               <span className="mt-0.5 block text-xs font-normal text-slate-500">Autobus ili tramvaj</span>
             </button>
             <button
+              onClick={() => setShowSchoolRoute(true)}
+              className="w-full rounded-xl bg-slate-900 px-4 py-3 text-left font-medium text-white shadow-sm hover:bg-slate-800"
+            >
+              Do škole <span className="mt-0.5 block text-xs font-normal text-slate-300">Planiraj polazak ili pronađi najbržu rutu</span>
+            </button>
+            <button
               onClick={() => setShowSchedule(true)}
               className="w-full bg-primary text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition-colors"
             >
@@ -312,6 +321,7 @@ function App() {
             <button onClick={findNearestStop} disabled={locating || nearbyStops.length === 0} className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-lg disabled:opacity-60" aria-label="Pronađi najbližu stanicu">
               {locating ? 'Tražim…' : 'Najbliža stanica'}
             </button>
+            <button onClick={() => setShowSchoolRoute(true)} className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white shadow-lg">Do škole</button>
             <button onClick={() => setShowSchedule(true)} className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg">
               Linije i polasci
             </button>
@@ -344,6 +354,7 @@ function App() {
               onStopClick={(stop) => {
                 setSelectedStop(stop);
               }}
+              schoolPlan={schoolPlan}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-100">
@@ -413,6 +424,8 @@ function App() {
           onClose={() => setShowSchedule(false)}
         />
       )}
+
+      {showSchoolRoute && <SchoolRoutePanel onClose={() => setShowSchoolRoute(false)} onPlan={setSchoolPlan} />}
 
       {showAuthModal && (
         <AuthModal onClose={() => setShowAuthModal(false)} loginEnabled={authStatus.loginEnabled} registrationEnabled={authStatus.registrationEnabled} />

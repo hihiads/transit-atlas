@@ -1,4 +1,4 @@
-import { City, VehicleResponse, VehicleProfile, StopsResponse, RoutesResponse, StopDeparturesResponse, SystemStatus, TransitShape } from './types';
+import { City, VehicleResponse, VehicleProfile, StopsResponse, RoutesResponse, StopDeparturesResponse, SystemStatus, TransitShape, SchoolRoutePlan } from './types';
 
 const API_BASE = '/api';
 
@@ -9,6 +9,16 @@ export interface AuthStatus {
 }
 
 export const api = {
+  async searchSchoolAddress(query: string): Promise<{ id: string; name: string; lat: number; lon: number }[]> {
+    const res = await fetch(`${API_BASE}/schoolroute/search?q=${encodeURIComponent(query)}`);
+    if (!res.ok) throw new Error('Pretraga adrese trenutačno nije dostupna.');
+    return res.json();
+  },
+  async planSchoolRoute(input: { origin: { lat: number; lon: number }; destination: { lat: number; lon: number }; arriveBy: string; mode: 'arrive' | 'fastest' }): Promise<{ plan: SchoolRoutePlan | null; message?: string; note?: string }> {
+    const res = await fetch(`${API_BASE}/schoolroute/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+    if (!res.ok) throw new Error((await res.json()).error || 'Planiranje rute nije uspjelo.');
+    return res.json();
+  },
   async getAuthStatus(): Promise<AuthStatus> {
     const res = await fetch(`${API_BASE}/auth/status`);
     if (!res.ok) throw new Error('Failed to fetch authentication status');
