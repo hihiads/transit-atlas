@@ -117,17 +117,3 @@ export interface SystemStatus {
     stopTimes: number;
   };
 }
-
-export interface SchoolRoutePlan {
-  leaveAt: string;
-  arriveAt: string;
-  from: { stop_id: string; stop_name: string; stop_lat: string; stop_lon: string };
-  to: { stop_id: string; stop_name: string; stop_lat: string; stop_lon: string };
-  route: string;
-  headsign: string;
-  shapeId: string | null;
-  walkTo: number;
-  walkFrom: number;
-  walkToMeters: number;
-  walkFromMeters: number;
-}

@@ -4,10 +4,9 @@ import Header from './components/Header';
 import FilterPanel from './components/FilterPanel';
 import VehicleCard from './components/VehicleCard';
 import SchedulePanel from './components/SchedulePanel';
-import SchoolRoutePanel from './components/SchoolRoutePanel';
 import AuthModal from './components/Auth/AuthModal';
 import { api, AuthStatus } from './api';
-import { Vehicle, City, Stop, TransitShape, SchoolRoutePlan } from './types';
+import { Vehicle, City, Stop, TransitShape } from './types';
 
 function App() {
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
@@ -18,21 +17,17 @@ function App() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
-  const [showSchoolRoute, setShowSchoolRoute] = useState(false);
-  const [schoolPlan, setSchoolPlan] = useState<SchoolRoutePlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataStatus, setDataStatus] = useState<'demo' | 'live' | 'unavailable'>('demo');
   const [showStops, setShowStops] = useState(false);
   const [showShapes, setShowShapes] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [nearbyStops, setNearbyStops] = useState<Stop[]>([]);
   const [mapCenter, setMapCenter] = useState<[number, number]>([45.815, 15.9819]);
   const [mapZoom, setMapZoom] = useState(12);
   const [userLocation, setUserLocation] = useState<[number, number] | undefined>();
   const [locating, setLocating] = useState(false);
   const [locationMessage, setLocationMessage] = useState('');
-  const [nearestDistance, setNearestDistance] = useState<number | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ loginEnabled: true, registrationEnabled: true, authenticationActive: true });
   const [authStatusLoading, setAuthStatusLoading] = useState(true);
 
@@ -92,9 +87,7 @@ function App() {
     setMapCenter(selectedCity.center);
     setMapZoom(selectedCity.zoom);
     setUserLocation(undefined);
-    setNearbyStops([]);
     setSelectedStop(null);
-    setNearestDistance(null);
     setLocationMessage('');
     let cancelled = false;
 
@@ -126,7 +119,6 @@ function App() {
         const cityStops = response.stops.map(stop => ({ ...stop, cityId: selectedCity.id }));
         if (cancelled) return;
         setStops(cityStops);
-        setNearbyStops(cityStops);
       })
       .catch(() => {
         setStops([]);
@@ -151,7 +143,7 @@ function App() {
     return () => { cancelled = true; clearInterval(interval); };
   }, [selectedCity]);
 
-  function findNearestStop() {
+  function findMyLocation() {
     setLocationMessage('');
     if (!navigator.geolocation) {
       setLocationMessage('Ovaj uređaj ne može pronaći lokaciju.');
@@ -159,28 +151,11 @@ function App() {
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(({ coords }) => {
-      const validStops = nearbyStops.filter(stop => Number.isFinite(stop.lat) && Number.isFinite(stop.lon) && Math.abs(stop.lat) <= 90 && Math.abs(stop.lon) <= 180);
-      if (!validStops.length) {
-        setLocationMessage('Stanice trenutačno nisu dostupne.');
-        setLocating(false);
-        return;
-      }
-      const radians = (degrees: number) => degrees * Math.PI / 180;
-      const distance = (stop: Stop) => {
-        const dLat = radians(stop.lat - coords.latitude);
-        const dLon = radians(stop.lon - coords.longitude);
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(coords.latitude)) * Math.cos(radians(stop.lat)) * Math.sin(dLon / 2) ** 2;
-        return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      };
-      const nearest = validStops.reduce((best, stop) => distance(stop) < distance(best) ? stop : best);
-      const meters = Math.round(distance(nearest));
-      setUserLocation([coords.latitude, coords.longitude]);
-      setNearestDistance(meters);
-      setSelectedStop(nearest);
-      setShowStops(true);
-      setMapCenter([nearest.lat, nearest.lon]);
-      setMapZoom(15);
-      setLocationMessage(`Najbliža stanica je ${meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1)} km`} od vas.`);
+      const location: [number, number] = [coords.latitude, coords.longitude];
+      setUserLocation(location);
+      setSelectedStop(null);
+      setMapCenter(location);
+      setMapZoom(17);
       setLocating(false);
     }, error => {
       setLocating(false);
@@ -257,15 +232,9 @@ function App() {
           />
 
           <div className="mt-4 space-y-2">
-            <button onClick={findNearestStop} disabled={locating || nearbyStops.length === 0} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">
-              {locating ? 'Tražim najbližu stanicu…' : 'Pronađi najbližu stanicu'}
-              <span className="mt-0.5 block text-xs font-normal text-slate-500">Autobus ili tramvaj</span>
-            </button>
-            <button
-              onClick={() => setShowSchoolRoute(true)}
-              className="w-full rounded-xl bg-slate-900 px-4 py-3 text-left font-medium text-white shadow-sm hover:bg-slate-800"
-            >
-              Do škole <span className="mt-0.5 block text-xs font-normal text-slate-300">Planiraj polazak ili pronađi najbržu rutu</span>
+            <button onClick={findMyLocation} disabled={locating} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">
+              {locating ? 'Tražim lokaciju…' : 'Moja lokacija'}
+              <span className="mt-0.5 block text-xs font-normal text-slate-500">Prikaži me na karti</span>
             </button>
             <button
               onClick={() => setShowSchedule(true)}
@@ -318,10 +287,9 @@ function App() {
 
         <div className="flex-1 relative">
           <div className="absolute top-3 left-3 right-3 z-[999] flex items-start justify-between gap-2 md:hidden">
-            <button onClick={findNearestStop} disabled={locating || nearbyStops.length === 0} className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-lg disabled:opacity-60" aria-label="Pronađi najbližu stanicu">
-              {locating ? 'Tražim…' : 'Najbliža stanica'}
+            <button onClick={findMyLocation} disabled={locating} className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-lg disabled:opacity-60" aria-label="Moja lokacija">
+              {locating ? 'Tražim…' : 'Moja lokacija'}
             </button>
-            <button onClick={() => setShowSchoolRoute(true)} className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white shadow-lg">Do škole</button>
             <button onClick={() => setShowSchedule(true)} className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg">
               Linije i polasci
             </button>
@@ -354,7 +322,6 @@ function App() {
               onStopClick={(stop) => {
                 setSelectedStop(stop);
               }}
-              schoolPlan={schoolPlan}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-100">
@@ -391,7 +358,7 @@ function App() {
             <div className="flex justify-between items-start mb-3">
               <div>
                 <div className="text-xl font-bold text-primary">{selectedStop.name}</div>
-                <div className="mt-1 text-sm text-gray-500">Stanica autobusa ili tramvaja{nearestDistance !== null && selectedStop === nearbyStops.find(stop => stop.id === selectedStop.id) ? ` · ${nearestDistance < 1000 ? `${nearestDistance} m od vas` : `${(nearestDistance / 1000).toFixed(1)} km od vas`}` : ''}</div>
+                <div className="mt-1 text-sm text-gray-500">Stanica autobusa ili tramvaja</div>
                 {selectedStop.code && (
                   <div className="text-sm text-gray-500">Kod: {selectedStop.code}</div>
                 )}
@@ -424,8 +391,6 @@ function App() {
           onClose={() => setShowSchedule(false)}
         />
       )}
-
-      {showSchoolRoute && <SchoolRoutePanel onClose={() => setShowSchoolRoute(false)} onPlan={setSchoolPlan} />}
 
       {showAuthModal && (
         <AuthModal onClose={() => setShowAuthModal(false)} loginEnabled={authStatus.loginEnabled} registrationEnabled={authStatus.registrationEnabled} />
