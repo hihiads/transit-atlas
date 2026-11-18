@@ -1,7 +1,8 @@
-import { Vehicle } from '../types';
+import { Route, Vehicle } from '../types';
 
 interface FilterPanelProps {
   vehicles: Vehicle[];
+  routes: Route[];
   selectedType: 'all' | 'bus' | 'tram';
   selectedLine: string;
   onTypeChange: (type: 'all' | 'bus' | 'tram') => void;
@@ -11,13 +12,20 @@ interface FilterPanelProps {
 
 export default function FilterPanel({
   vehicles,
+  routes,
   selectedType,
   selectedLine,
   onTypeChange,
   onLineChange,
   compact = false
 }: FilterPanelProps) {
-  const lines = Array.from(new Set(vehicles.map(v => v.line))).sort((a, b) => {
+  const routeLines = routes
+    .filter(route => selectedType === 'all' || route.type === selectedType)
+    .map(route => route.shortName);
+  const vehicleLines = vehicles
+    .filter(vehicle => selectedType === 'all' || vehicle.type === selectedType)
+    .map(vehicle => vehicle.line);
+  const lines = Array.from(new Set([...routeLines, ...vehicleLines].filter(Boolean))).sort((a, b) => {
     const aNum = parseInt(a);
     const bNum = parseInt(b);
     if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;

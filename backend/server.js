@@ -478,8 +478,7 @@ app.get('/api/routes/:cityId', (req, res) => {
   const { cityId } = req.params;
 
   const data = cityId === 'hzpp' ? hzppData : cityId === 'beograd' ? beogradData : gtfsData;
-  const loaded = cityId === 'hzpp' ? hzppLoaded : cityId === 'beograd' ? beogradLoaded : gtfsLoaded;
-  if (!['zagreb', 'hzpp', 'beograd'].includes(cityId) || !loaded) {
+  if (!['zagreb', 'hzpp', 'beograd'].includes(cityId) || !data.routes.length) {
     return res.json({ routes: [], status: 'unavailable' });
   }
 
