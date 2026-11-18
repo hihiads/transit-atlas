@@ -112,6 +112,7 @@ let gtfsLoaded = false;
 let gtfsLoadError = null;
 let gtfsLoadInProgress = false;
 let rtFeedStatus = 'unknown';
+let staleVehiclesDropped = 0;
 
 // Helper funkcija za parsiranje GTFS CSV
 function parseGtfsCsv(csvText) {
@@ -354,6 +355,7 @@ setInterval(loadGtfsData, 24 * 60 * 60 * 1000);
 // Dohvati GTFS-Realtime vozila
 async function fetchRealtimeVehicles() {
   const rtUrl = 'https://www.zet.hr/gtfs-rt-protobuf';
+  staleVehiclesDropped = 0;
 
   try {
     const response = await fetch(rtUrl, { timeout: 10000 });
@@ -369,6 +371,8 @@ async function fetchRealtimeVehicles() {
 
     rtFeedStatus = 'active';
     const vehicles = [];
+    let staleCount = 0;
+    const feedTimestamp = feed.header?.timestamp ? Number(feed.header.timestamp) * 1000 : Date.now();
 
     for (const entity of feed.entity) {
       if (entity.vehicle && entity.vehicle.position) {
@@ -399,6 +403,12 @@ async function fetchRealtimeVehicles() {
           trip = gtfsData.trips.find(t => t.trip_id === vehicle.trip?.tripId);
         }
 
+        const lastUpdate = vehicle.timestamp ? Number(vehicle.timestamp) * 1000 : feedTimestamp;
+        if (Date.now() - lastUpdate > 10 * 60 * 1000) {
+          staleCount++;
+          continue;
+        }
+
         vehicles.push({
           id: vehicleId,
           type: route?.route_type === '0' ? 'tram' : 'bus',
@@ -406,7 +416,7 @@ async function fetchRealtimeVehicles() {
           direction: trip?.trip_headsign || route?.route_long_name || 'Nepoznato',
           lat: pos.latitude,
           lon: pos.longitude,
-          lastUpdate: vehicle.timestamp ? vehicle.timestamp * 1000 : Date.now(),
+          lastUpdate,
           garageNumber: vehicle.vehicle?.label || null,
           registrationNumber: vehicle.vehicle?.licensePlate || null,
           currentStopSequence: vehicle.currentStopSequence || null,
@@ -418,8 +428,9 @@ async function fetchRealtimeVehicles() {
       }
     }
 
+    staleVehiclesDropped = staleCount;
     console.log(`[GTFS-RT] ✓ Učitano ${vehicles.length} vozila`);
-    return vehicles;
+    return { vehicles, staleVehiclesDropped: staleCount };
   } catch (error) {
     rtFeedStatus = `greška: ${error.message}`;
     console.error(`[GTFS-RT] ✗ ${error.message}`);
@@ -454,8 +465,7 @@ app.get('/api/stops/:cityId', (req, res) => {
   const { cityId } = req.params;
 
   const data = cityId === 'hzpp' ? hzppData : cityId === 'beograd' ? beogradData : gtfsData;
-  const loaded = cityId === 'hzpp' ? hzppLoaded : cityId === 'beograd' ? beogradLoaded : gtfsLoaded;
-  if (!['zagreb', 'hzpp', 'beograd'].includes(cityId) || !loaded) {
+  if (!['zagreb', 'hzpp', 'beograd'].includes(cityId) || !data.stops.length) {
     return res.json({ stops: [], status: 'unavailable' });
   }
 
@@ -544,9 +554,9 @@ app.get('/api/vehicles/:cityId', async (req, res) => {
     });
   }
 
-  const realtimeVehicles = await fetchRealtimeVehicles();
+  const realtime = await fetchRealtimeVehicles();
 
-  if (realtimeVehicles === null) {
+  if (realtime === null) {
     return res.json({
       status: 'unavailable',
       message: `GTFS-Realtime feed nije dostupan (${rtFeedStatus})`,
@@ -557,8 +567,9 @@ app.get('/api/vehicles/:cityId', async (req, res) => {
 
   res.json({
     status: 'live',
-    message: `Prikazano ${realtimeVehicles.length} vozila uživo`,
-    vehicles: realtimeVehicles,
+    message: `Prikazano ${realtime.vehicles.length} vozila uživo`,
+    vehicles: realtime.vehicles,
+    staleVehiclesDropped: realtime.staleVehiclesDropped,
     lastUpdate: Date.now(),
     source: 'gtfs-realtime'
   });
@@ -646,6 +657,7 @@ app.get('/api/system/status', (req, res) => {
     beogradLastUpdate,
     lastGtfsUpdate,
     rtFeedStatus,
+    staleVehiclesDropped,
     stats: {
       routes: gtfsData.routes.length,
       stops: gtfsData.stops.length,

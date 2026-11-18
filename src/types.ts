@@ -65,6 +65,7 @@ export interface VehicleResponse {
   status: 'demo' | 'live' | 'unavailable';
   message?: string;
   lastUpdate: number;
+  staleVehiclesDropped?: number;
   vehicles: Vehicle[];
   source: string;
 }

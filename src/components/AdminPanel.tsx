@@ -28,7 +28,9 @@ export default function AdminPanel() {
   const [missing, setMissing] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [system, setSystem] = useState<{ stats?: { routes: number; stops: number }; rtFeedStatus?: string } | null>(null);
+  const [refreshingData, setRefreshingData] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState('');
+  const [system, setSystem] = useState<{ stats?: { routes: number; stops: number }; rtFeedStatus?: string; staleVehiclesDropped?: number } | null>(null);
 
   async function loadSettings() {
     const result = await request<AdminResponse>('/settings');
@@ -82,6 +84,26 @@ export default function AdminPanel() {
     setMessage('Odjavljeni ste.');
   }
 
+  async function refreshTransitData() {
+    setRefreshingData(true);
+    setRefreshMessage('');
+    try {
+      const response = await fetch('/api/vehicles/zagreb', { cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'live') throw new Error(result.message || 'ZET podatke nije moguće osvježiti.');
+      const newestUpdate = Math.max(0, ...result.vehicles.map((vehicle: { lastUpdate: number }) => vehicle.lastUpdate));
+      const ageSeconds = newestUpdate ? Math.max(0, Math.round((Date.now() - newestUpdate) / 1000)) : null;
+      const age = ageSeconds === null ? 'nema svježih lokacija' : ageSeconds < 60 ? `prije ${ageSeconds} s` : `prije ${Math.round(ageSeconds / 60)} min`;
+      setRefreshMessage(`Dohvaćeno ${result.vehicles.length} svježih vozila; najnoviji podatak ${age}. Odbačeno zastarjelih lokacija: ${result.staleVehiclesDropped || 0}.`);
+      const status = await fetch('/api/system/status', { cache: 'no-store' });
+      if (status.ok) setSystem(await status.json());
+    } catch (error) {
+      setRefreshMessage(error instanceof Error ? error.message : 'Osvježavanje nije uspjelo.');
+    } finally {
+      setRefreshingData(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 sm:py-14">
       <div className="mx-auto max-w-2xl">
@@ -126,6 +148,9 @@ export default function AdminPanel() {
               <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs text-slate-500">Linije u Zagrebu</p><p className="mt-1 text-xl font-semibold">{system?.stats?.routes?.toLocaleString('hr-HR') ?? '—'}</p></div>
             </div>
             <p className="mt-3 text-sm text-slate-600">Lokacije vozila: {system?.rtFeedStatus === 'active' ? 'dostupne' : system?.rtFeedStatus || 'provjera nije dostupna'}</p>
+            {system?.staleVehiclesDropped ? <p className="mt-1 text-sm text-amber-800">Odbačeno zastarjelih lokacija: {system.staleVehiclesDropped}</p> : null}
+            <button onClick={refreshTransitData} disabled={refreshingData} className="mt-4 rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-800 disabled:bg-slate-400">{refreshingData ? 'Dohvaćam ZET podatke…' : 'Osvježi podatke sa ZET-a'}</button>
+            {refreshMessage && <p className="mt-3 text-sm text-slate-700" role="status">{refreshMessage}</p>}
           </section>
         </>}
       </div>

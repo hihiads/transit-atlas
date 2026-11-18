@@ -117,20 +117,53 @@ function App() {
         setVehicles([]);
       });
 
-    api.getRoutes(selectedCity.id)
-      .then(response => { if (!cancelled) setRoutes(response.routes); })
-      .catch(() => { if (!cancelled) setRoutes([]); });
-
-    // Učitaj stanice
-    api.getStops(selectedCity.id)
-      .then(response => {
-        const cityStops = response.stops.map(stop => ({ ...stop, cityId: selectedCity.id }));
+    let routeRetry: number | undefined;
+    const scheduleRoutesRetry = () => {
+      routeRetry = window.setTimeout(() => {
+        routeRetry = undefined;
+        void loadRoutes();
+      }, 5000);
+    };
+    const loadRoutes = async () => {
+      try {
+        const response = await api.getRoutes(selectedCity.id);
         if (cancelled) return;
-        setStops(cityStops);
-      })
-      .catch(() => {
-        setStops([]);
-      });
+        setRoutes(response.routes);
+        if (response.routes.length && routeRetry !== undefined) {
+          window.clearTimeout(routeRetry);
+          routeRetry = undefined;
+        } else if (!response.routes.length && routeRetry === undefined) scheduleRoutesRetry();
+      } catch {
+        if (!cancelled && routeRetry === undefined) scheduleRoutesRetry();
+      }
+    };
+    void loadRoutes();
+
+    let stopsRetry: number | undefined;
+    const scheduleStopsRetry = () => {
+      stopsRetry = window.setTimeout(() => {
+        stopsRetry = undefined;
+        void loadStops();
+      }, 5000);
+    };
+    const loadStops = async () => {
+      try {
+        const response = await api.getStops(selectedCity.id);
+        if (cancelled) return;
+        if (response.stops.length) {
+          setStops(response.stops.map(stop => ({ ...stop, cityId: selectedCity.id })));
+          if (stopsRetry !== undefined) {
+            window.clearTimeout(stopsRetry);
+            stopsRetry = undefined;
+          }
+        } else if (stopsRetry === undefined) scheduleStopsRetry();
+      } catch {
+        if (!cancelled && stopsRetry === undefined) scheduleStopsRetry();
+      }
+    };
+    void loadStops();
+
+    setStops([]);
 
     api.getShapes(selectedCity.id)
       .then(response => setShapes(response.shapes))
@@ -148,7 +181,12 @@ function App() {
       }
     }, 10000);
 
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      if (routeRetry !== undefined) window.clearTimeout(routeRetry);
+      if (stopsRetry !== undefined) window.clearTimeout(stopsRetry);
+    };
   }, [selectedCity]);
 
   function findMyLocation() {
@@ -283,7 +321,7 @@ function App() {
               {locating ? 'Tražim lokaciju…' : 'Moja lokacija'}
               <span className="mt-0.5 block text-xs font-normal text-slate-500">Prikaži me na karti</span>
             </button>
-            <button onClick={findNearestStop} disabled={locating || stops.length === 0} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">
+            <button onClick={findNearestStop} disabled={locating} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">
               {locating ? 'Tražim…' : 'Moja najbliža stanica'}
               <span className="mt-0.5 block text-xs font-normal text-slate-500">Prikaži stanicu i udaljenost</span>
             </button>
@@ -341,7 +379,7 @@ function App() {
             <button onClick={findMyLocation} disabled={locating} className="min-w-0 rounded-xl bg-white px-2 py-3 text-center text-xs font-semibold text-slate-800 shadow-lg disabled:opacity-60" aria-label="Moja lokacija">
               {locating ? 'Tražim…' : 'Moja lokacija'}
             </button>
-            <button onClick={findNearestStop} disabled={locating || stops.length === 0} className="min-w-0 rounded-xl bg-white px-2 py-3 text-center text-xs font-semibold text-slate-800 shadow-lg disabled:opacity-60" aria-label="Moja najbliža stanica">
+            <button onClick={findNearestStop} disabled={locating} className="min-w-0 rounded-xl bg-white px-2 py-3 text-center text-xs font-semibold text-slate-800 shadow-lg disabled:opacity-60" aria-label="Moja najbliža stanica">
               {locating ? 'Tražim…' : 'Najbliža stanica'}
             </button>
             <button onClick={() => setShowSchedule(true)} className="min-w-0 rounded-xl bg-slate-900 px-2 py-3 text-center text-xs font-semibold text-white shadow-lg">
