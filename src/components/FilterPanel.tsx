@@ -34,12 +34,12 @@ export default function FilterPanel({
 
   if (compact) {
     return (
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2 rounded-xl bg-white/95 p-2 shadow-lg backdrop-blur">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2 rounded-2xl border border-white/70 bg-white/95 p-2 shadow-[0_8px_30px_rgba(22,45,58,0.14)] backdrop-blur">
         <select
           aria-label="Vrsta vozila"
           value={selectedType}
           onChange={(event) => onTypeChange(event.target.value as 'all' | 'bus' | 'tram')}
-          className="min-w-0 rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm text-gray-800"
+          className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2.5 text-xs font-medium text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 sm:text-sm"
         >
           <option value="all">Sva vozila</option>
           <option value="bus">Autobusi</option>
@@ -49,7 +49,7 @@ export default function FilterPanel({
           aria-label="Filtriraj po liniji"
           value={selectedLine}
           onChange={(event) => onLineChange(event.target.value)}
-          className="min-w-0 rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm text-gray-800"
+          className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2.5 text-xs font-medium text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 sm:text-sm"
         >
           <option value="">Sve linije</option>
           {lines.map(line => <option key={line} value={line}>Linija {line}</option>)}
@@ -59,21 +59,24 @@ export default function FilterPanel({
   }
 
   return (
-    <div className="bg-white shadow-lg rounded-lg p-4 mb-4 md:mb-0">
-      <h3 className="font-semibold text-lg mb-3 text-gray-800">Filteri</h3>
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_8px_28px_rgba(22,45,58,0.06)] md:mb-0">
+      <div className="mb-4 flex items-center justify-between">
+        <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-700">Karta</p><h3 className="mt-1 text-lg font-bold tracking-tight text-slate-900">Pronađi liniju</h3></div>
+        <span className="rounded-xl bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-800">{vehicles.length} vozila</span>
+      </div>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Tip vozila
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Vrsta prijevoza
           </label>
           <div className="flex gap-2">
             <button
               onClick={() => onTypeChange('all')}
               className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 selectedType === 'all'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-[#102638] text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               Sve
@@ -82,8 +85,8 @@ export default function FilterPanel({
               onClick={() => onTypeChange('bus')}
               className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 selectedType === 'bus'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-sky-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               Autobus
@@ -92,8 +95,8 @@ export default function FilterPanel({
               onClick={() => onTypeChange('tram')}
               className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 selectedType === 'tram'
-                  ? 'bg-red-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               Tramvaj
@@ -102,13 +105,13 @@ export default function FilterPanel({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
             Linija
           </label>
           <select
             value={selectedLine}
             onChange={(e) => onLineChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-100"
           >
             <option value="">Sve linije</option>
             {lines.map(line => (

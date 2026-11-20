@@ -4,6 +4,7 @@
 
 body {
   margin: 0;
+  background: #f3f7f6;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
@@ -12,7 +13,7 @@ body {
 }
 
 #root {
-  width: 100vw;
+  width: 100%;
   height: 100vh;
   overflow: hidden;
 }
@@ -20,4 +21,20 @@ body {
 .leaflet-container {
   width: 100%;
   height: 100%;
+}
+
+.leaflet-control-zoom a {
+  color: #183a4d !important;
+}
+
+.leaflet-control-zoom {
+  overflow: hidden;
+  border: 1px solid rgba(15, 35, 50, 0.1) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(15, 35, 50, 0.14) !important;
+}
+
+.leaflet-control-attribution {
+  border-top-left-radius: 10px;
+  background: rgba(255, 255, 255, 0.82) !important;
 }

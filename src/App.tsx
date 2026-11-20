@@ -263,10 +263,12 @@ function App() {
 
   if (loading || authStatusLoading) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-50">
+      <div className="flex h-full w-full items-center justify-center bg-[#f3f7f6]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
-          <div className="text-gray-600">Učitavanje...</div>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#102638] text-[#a9f0d1] shadow-lg">
+            <svg className="h-7 w-7 animate-pulse" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 3.75h10A2.25 2.25 0 0 1 19.25 6v9A2.25 2.25 0 0 1 17 17.25H7A2.25 2.25 0 0 1 4.75 15V6A2.25 2.25 0 0 1 7 3.75Z" stroke="currentColor" strokeWidth="1.8"/><path d="M7.5 7h9v5h-9zM8 20l2-2.75m6 2.75L14 17.25" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>
+          </div>
+          <div className="text-sm font-medium text-slate-600">Učitavam kartu…</div>
         </div>
       </div>
     );
@@ -274,10 +276,10 @@ function App() {
 
   if (error) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md p-8">
-          <div className="text-red-600 text-xl font-semibold mb-2">Greška</div>
-          <div className="text-gray-600">{error}</div>
+      <div className="flex h-full w-full items-center justify-center bg-[#f3f7f6] p-4">
+        <div className="max-w-md rounded-3xl border border-rose-100 bg-white p-8 text-center shadow-xl shadow-slate-900/5">
+          <div className="mb-2 text-xl font-bold text-slate-900">Nešto nije učitano</div>
+          <div className="text-sm leading-6 text-slate-600">{error}</div>
         </div>
       </div>
     );
@@ -285,8 +287,8 @@ function App() {
 
   if (!selectedCity) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-50">
-        <div className="text-gray-600">Nema dostupnih gradova</div>
+      <div className="flex h-full w-full items-center justify-center bg-[#f3f7f6]">
+        <div className="rounded-2xl bg-white px-6 py-5 text-sm font-medium text-slate-600 shadow">Trenutno nema dostupnih gradova.</div>
       </div>
     );
   }
@@ -303,7 +305,7 @@ function App() {
       />
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        <div className="hidden md:block md:w-80 p-4 bg-gray-50 overflow-y-auto">
+        <div className="hidden w-80 shrink-0 overflow-y-auto border-r border-slate-200/80 bg-[#f3f7f6] p-4 md:block lg:w-[352px] lg:p-5">
           <FilterPanel
             vehicles={vehicles}
             routes={routes}
@@ -316,18 +318,18 @@ function App() {
             onLineChange={setSelectedLine}
           />
 
-          <div className="mt-4 space-y-2">
-            <button onClick={findMyLocation} disabled={locating} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">
+          <div className="mt-4 space-y-2.5">
+            <button onClick={findMyLocation} disabled={locating} className="w-full rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 text-left font-semibold text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md disabled:opacity-60">
               {locating ? 'Tražim lokaciju…' : 'Moja lokacija'}
-              <span className="mt-0.5 block text-xs font-normal text-slate-500">Prikaži me na karti</span>
+              <span className="mt-1 block text-xs font-normal text-slate-500">Prikaži me na karti</span>
             </button>
-            <button onClick={findNearestStop} disabled={locating} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">
+            <button onClick={findNearestStop} disabled={locating} className="w-full rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 text-left font-semibold text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md disabled:opacity-60">
               {locating ? 'Tražim…' : 'Moja najbliža stanica'}
-              <span className="mt-0.5 block text-xs font-normal text-slate-500">Prikaži stanicu i udaljenost</span>
+              <span className="mt-1 block text-xs font-normal text-slate-500">Prikaži stanicu i udaljenost</span>
             </button>
             <button
               onClick={() => setShowSchedule(true)}
-              className="w-full bg-primary text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition-colors"
+              className="w-full rounded-2xl bg-[#102638] px-4 py-3.5 font-semibold text-white shadow-md shadow-slate-900/10 transition hover:bg-[#183a4d]"
             >
               Linije i polasci
             </button>
@@ -336,8 +338,8 @@ function App() {
               onClick={() => setShowStops(!showStops)}
               className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
                 showStops
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  ? 'bg-teal-700 text-white shadow-sm hover:bg-teal-800'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
               {showStops ? '✓ Sakrij stanice' : '🚏 Prikaži stanice'}
@@ -345,7 +347,7 @@ function App() {
 
             <button
               onClick={() => setShowShapes(!showShapes)}
-              className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${showShapes ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'}`}
+              className={`w-full rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${showShapes ? 'border-indigo-700 bg-indigo-700 text-white hover:bg-indigo-800' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
             >
               {showShapes ? '✓ Sakrij trase linija' : 'Prikaži trase linija'}
             </button>
@@ -353,21 +355,21 @@ function App() {
           {locationMessage && <p className="mt-2 text-sm text-slate-600" role="status">{locationMessage}</p>}
 
           {selectedCity.status === 'unavailable' && (
-            <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-5 text-amber-900">
               <strong>Grad trenutno nije podržan.</strong><br />
               Podaci za {selectedCity.name} još nisu dostupni.
             </div>
           )}
 
           {dataStatus === 'live' && (
-            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-5 text-emerald-900">
               <strong>✓ Podaci uživo</strong><br />
               Prikazuju se lokacije koje šalje ZET.
             </div>
           )}
 
           {dataStatus === 'unavailable' && selectedCity.id === 'zagreb' && (
-            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">
+            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-5 text-rose-900">
               <strong>Lokacije trenutačno nisu dostupne</strong><br />
               Pokušajte ponovno malo kasnije.
             </div>
@@ -447,7 +449,7 @@ function App() {
       )}
 
       {selectedStop && (
-        <div className="fixed bottom-0 left-0 right-0 md:left-auto md:right-4 md:bottom-4 md:w-96 bg-white rounded-t-2xl md:rounded-2xl shadow-2xl z-[1000] max-h-[50vh] overflow-y-auto">
+        <div className="fixed bottom-0 left-0 right-0 z-[1000] max-h-[50vh] overflow-y-auto rounded-t-3xl border border-slate-200 bg-white shadow-[0_-12px_40px_rgba(15,35,50,0.18)] md:bottom-4 md:left-auto md:right-4 md:w-96 md:rounded-3xl">
           <div className="p-4">
             <div className="flex justify-between items-start mb-3">
               <div>
