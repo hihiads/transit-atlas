@@ -55,7 +55,7 @@ function App() {
         const moment = mins <= 10 && mins >= 0 ? 'soon' : mins < 0 && mins >= -1 ? 'now' : '';
         const key = `transit-notified:${now.toDateString()}:${item}:${moment}`;
         if (moment && !sessionStorage.getItem(key)) {
-          new Notification(moment === 'soon' ? 'Polazak za 10 minuta' : 'Vrijeme polaska', { body: `Praćeni polazak je u ${time.slice(0, 5)}. Otvorite Transit Atlas za stanje.` });
+          new Notification(moment === 'soon' ? 'Polazak za 10 minuta' : 'Vrijeme polaska', { body: `Praćeni polazak je u ${time.slice(0, 5)}. Otvorite Transitly za stanje.` });
           sessionStorage.setItem(key, '1');
         }
       }

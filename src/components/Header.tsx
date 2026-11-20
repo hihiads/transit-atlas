@@ -25,7 +25,7 @@ export default function Header({
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold truncate">Transit Atlas</h1>
+              <h1 className="text-xl sm:text-2xl font-bold truncate">Transitly</h1>
               <p className="text-xs sm:text-sm text-gray-300 hidden sm:block">Pronađi prijevoz u blizini</p>
             </div>
 

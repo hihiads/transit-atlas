@@ -2,7 +2,7 @@
 
 ## ✅ Brzi pregled
 
-Transit Atlas koristi **JEDNU `.env` datoteku** za sve konfiguracije (backend + frontend). Vaš hosting provider može jednostavno učitati sve varijable iz jednog mjesta.
+Transitly koristi **JEDNU `.env` datoteku** za sve konfiguracije (backend + frontend). Vaš hosting provider može jednostavno učitati sve varijable iz jednog mjesta.
 
 ## 📋 Environment varijable za hosting provider
 
@@ -38,7 +38,7 @@ SMTP_HOST=<vaš-smtp-host>
 SMTP_PORT=587
 SMTP_USER=<smtp-user>
 SMTP_PASS=<smtp-password>
-SMTP_FROM=Transit Atlas <noreply@vaša-domena.com>
+SMTP_FROM=Transitly <noreply@vaša-domena.com>
 APP_BASE_URL=https://vaša-domena.com
 GOOGLE_CLIENT_ID=<google-oauth-client-id>
 APPLE_CLIENT_ID=<apple-services-id>

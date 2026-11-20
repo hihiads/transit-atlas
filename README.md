@@ -1,6 +1,6 @@
-# Transit Atlas - Produkcijska Dokumentacija
+# Transitly - Produkcijska Dokumentacija
 
-Transit Atlas je interaktivna karta javnog prijevoza s potpunom autentifikacijom i sigurnosnim zaštitama, spremna za produkcijsko okruženje.
+Transitly je interaktivna karta javnog prijevoza s potpunom autentifikacijom i sigurnosnim zaštitama, spremna za produkcijsko okruženje.
 
 ## 🚀 Funkcionalnosti
 
@@ -166,7 +166,7 @@ SMTP_HOST=<vaš-smtp-host>
 SMTP_PORT=587
 SMTP_USER=<smtp-user>
 SMTP_PASS=<smtp-password>
-SMTP_FROM=Transit Atlas <noreply@vaša-domena.com>
+SMTP_FROM=Transitly <noreply@vaša-domena.com>
 APP_BASE_URL=https://vaša-domena.com
 ```
 

@@ -25,5 +25,5 @@ async function send(to, subject, link, action) {
   return true;
 }
 
-export const sendVerificationEmail = (to, token) => send(to, 'Potvrdite Transit Atlas račun', `/verify-email?token=${encodeURIComponent(token)}`, 'Potvrdite email adresu');
-export const sendPasswordResetEmail = (to, token) => send(to, 'Promjena lozinke za Transit Atlas', `/reset-password?token=${encodeURIComponent(token)}`, 'Promijenite lozinku');
+export const sendVerificationEmail = (to, token) => send(to, 'Potvrdite Transitly račun', `/verify-email?token=${encodeURIComponent(token)}`, 'Potvrdite email adresu');
+export const sendPasswordResetEmail = (to, token) => send(to, 'Promjena lozinke za Transitly', `/reset-password?token=${encodeURIComponent(token)}`, 'Promijenite lozinku');

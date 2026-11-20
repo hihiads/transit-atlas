@@ -9,7 +9,7 @@ Projekt koristi jedan Node web service: Vite izgradi frontend, a Express posluž
 
    ```sh
    git add .
-   git commit -m "Prepare Transit Atlas for Render"
+   git commit -m "Prepare Transitly for Render"
    git branch -M main
    git remote add origin https://github.com/VAŠE-IME/transit-atlas.git
    git push -u origin main
