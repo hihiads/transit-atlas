@@ -2,10 +2,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export interface OAuthProviders {
   google: boolean;
-  apple: boolean;
   googleClientId: string | null;
-  appleClientId: string | null;
-  appleRedirectUri: string | null;
 }
 
 export interface OAuthChallenge {
@@ -19,7 +16,7 @@ export async function getOAuthProviders(): Promise<OAuthProviders> {
   return handleResponse<OAuthProviders>(response);
 }
 
-export async function createOAuthChallenge(provider: 'google' | 'apple'): Promise<OAuthChallenge> {
+export async function createOAuthChallenge(provider: 'google'): Promise<OAuthChallenge> {
   const response = await fetch(`${API_BASE}/api/auth/oauth/challenge`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
     body: JSON.stringify({ provider })
@@ -27,10 +24,10 @@ export async function createOAuthChallenge(provider: 'google' | 'apple'): Promis
   return handleResponse<OAuthChallenge>(response);
 }
 
-export async function finishOAuth(provider: 'google' | 'apple', idToken: string, state?: string): Promise<AuthResponse> {
+export async function finishOAuth(provider: 'google', idToken: string): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE}/api/auth/oauth/${provider}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-    body: JSON.stringify({ idToken, state })
+    body: JSON.stringify({ idToken })
   });
   return handleResponse<AuthResponse>(response);
 }

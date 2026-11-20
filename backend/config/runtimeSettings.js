@@ -5,8 +5,7 @@ const settingsFile = process.env.ADMIN_SETTINGS_FILE || join(process.cwd(), 'bac
 let settings = {
   loginEnabled: process.env.AUTH_LOGIN_ENABLED !== 'false',
   registrationEnabled: process.env.AUTH_REGISTRATION_ENABLED !== 'false',
-  googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID) && process.env.AUTH_GOOGLE_ENABLED !== 'false',
-  appleEnabled: Boolean(process.env.APPLE_CLIENT_ID) && process.env.AUTH_APPLE_ENABLED !== 'false'
+  googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID) && process.env.AUTH_GOOGLE_ENABLED !== 'false'
 };
 
 export function getRuntimeSettings() {
@@ -26,8 +25,7 @@ export async function loadRuntimeSettings() {
     settings = {
       loginEnabled: stored.loginEnabled,
       registrationEnabled: stored.registrationEnabled,
-      googleEnabled: typeof stored.googleEnabled === 'boolean' ? stored.googleEnabled : Boolean(process.env.GOOGLE_CLIENT_ID),
-      appleEnabled: typeof stored.appleEnabled === 'boolean' ? stored.appleEnabled : Boolean(process.env.APPLE_CLIENT_ID)
+      googleEnabled: typeof stored.googleEnabled === 'boolean' ? stored.googleEnabled : Boolean(process.env.GOOGLE_CLIENT_ID)
     };
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;

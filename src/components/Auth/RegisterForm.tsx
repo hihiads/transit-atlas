@@ -31,12 +31,13 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+  const turnstileOptional = import.meta.env.DEV && !turnstileSiteKey;
   const turnstileRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-    if (!siteKey || !turnstileRef.current) return;
+    if (!turnstileSiteKey || !turnstileRef.current) return;
 
     const script = document.createElement('script');
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
@@ -46,7 +47,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
     script.onload = () => {
       if (window.turnstile && turnstileRef.current) {
         widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-          sitekey: siteKey,
+          sitekey: turnstileSiteKey,
           callback: (token: string) => setTurnstileToken(token),
           'error-callback': () => {
             setError('Turnstile provjera nije uspjela');
@@ -76,7 +77,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
       return;
     }
 
-    if (!turnstileToken) {
+    if (!turnstileToken && !turnstileOptional) {
       setError('Molimo pričekajte Turnstile provjeru');
       return;
     }
@@ -84,7 +85,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
     setLoading(true);
 
     try {
-      const response = await register(email, password, turnstileToken);
+      const response = await register(email, password, turnstileToken || '');
       setSuccess(response.message);
 
       // Reset Turnstile
@@ -174,11 +175,13 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
           />
         </div>
 
-        <div ref={turnstileRef} className="flex justify-center"></div>
+        {turnstileSiteKey ? <div ref={turnstileRef} className="flex justify-center"></div> : turnstileOptional ? null : (
+          <p className="text-sm text-red-700" role="alert">Registracija trenutačno nije konfigurirana. Administrator treba postaviti Cloudflare Turnstile ključeve.</p>
+        )}
 
         <button
           type="submit"
-          disabled={loading || !turnstileToken}
+          disabled={loading || (!turnstileToken && !turnstileOptional)}
           className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
           {loading ? 'Registracija...' : 'Registriraj se'}

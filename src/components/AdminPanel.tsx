@@ -4,7 +4,6 @@ interface Settings {
   loginEnabled: boolean;
   registrationEnabled: boolean;
   googleEnabled: boolean;
-  appleEnabled: boolean;
 }
 
 interface AdminResponse {
@@ -23,8 +22,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export default function AdminPanel() {
   const [password, setPassword] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
-  const [settings, setSettings] = useState<Settings>({ loginEnabled: false, registrationEnabled: false, googleEnabled: false, appleEnabled: false });
-  const [draft, setDraft] = useState<Settings>({ loginEnabled: false, registrationEnabled: false, googleEnabled: false, appleEnabled: false });
+  const [settings, setSettings] = useState<Settings>({ loginEnabled: false, registrationEnabled: false, googleEnabled: false });
+  const [draft, setDraft] = useState<Settings>({ loginEnabled: false, registrationEnabled: false, googleEnabled: false });
   const [missing, setMissing] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -126,7 +125,7 @@ export default function AdminPanel() {
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="mb-6"><h2 className="text-lg font-semibold">Prijava i registracija</h2><p className="mt-1 text-sm text-slate-600">Kad su obje opcije isključene, korisnici se ne mogu prijaviti ni registrirati.</p></div>
             <div className="divide-y divide-slate-100">
-              {([['loginEnabled', 'Prijava', 'Sprečava prijavu lozinkom i preko povezanih računa.'], ['registrationEnabled', 'Registracija', 'Sprečava stvaranje novih računa.'], ['googleEnabled', 'Google prijava', 'Dostupna kad je Google client ID konfiguriran.'], ['appleEnabled', 'Apple prijava', 'Dostupna kad je Apple Services ID konfiguriran.']] as const).map(([key, title, description]) => (
+              {([['loginEnabled', 'Prijava', 'Sprečava prijavu lozinkom i preko povezanih računa.'], ['registrationEnabled', 'Registracija', 'Sprečava stvaranje novih računa.'], ['googleEnabled', 'Google prijava', 'Dostupna kad je Google client ID konfiguriran.']] as const).map(([key, title, description]) => (
                 <label key={key} className="flex cursor-pointer items-center justify-between gap-4 py-5 first:pt-0 last:pb-0">
                   <span><span className="block text-sm font-medium">{title}</span><span className="mt-1 block text-sm text-slate-500">{description}</span></span>
                   <input type="checkbox" checked={draft[key]} onChange={event => setDraft(current => ({ ...current, [key]: event.target.checked }))} className="h-5 w-5 shrink-0 accent-blue-700" />

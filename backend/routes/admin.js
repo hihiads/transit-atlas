@@ -59,11 +59,10 @@ router.patch('/settings', requireAdmin,
   body('loginEnabled').isBoolean({ strict: true }),
   body('registrationEnabled').isBoolean({ strict: true }),
   body('googleEnabled').isBoolean({ strict: true }),
-  body('appleEnabled').isBoolean({ strict: true }),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty() || Object.values(req.body).some(value => typeof value !== 'boolean')) return res.status(400).json({ error: 'Postavke nisu valjane.' });
-    const next = { loginEnabled: req.body.loginEnabled, registrationEnabled: req.body.registrationEnabled, googleEnabled: req.body.googleEnabled, appleEnabled: req.body.appleEnabled };
+    const next = { loginEnabled: req.body.loginEnabled, registrationEnabled: req.body.registrationEnabled, googleEnabled: req.body.googleEnabled };
     if (next.loginEnabled || next.registrationEnabled) {
       const missing = missingAuthenticationEnvironment(next);
       if (missing.length) return res.status(409).json({ error: 'Prijava se ne može uključiti dok nedostaju ove postavke.', missingEnvironment: missing });

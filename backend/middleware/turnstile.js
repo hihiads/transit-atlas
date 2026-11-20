@@ -3,7 +3,7 @@ import fetch from 'node-fetch';
 export async function verifyTurnstile(req, res, next) {
   // Skip u lokalnom razvoju ako je TURNSTILE_SECRET_KEY dummy vrijednost
   if (process.env.NODE_ENV !== 'production' &&
-      process.env.TURNSTILE_SECRET_KEY?.startsWith('1x0000000')) {
+      (!process.env.TURNSTILE_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY.startsWith('1x0000000'))) {
     return next();
   }
 

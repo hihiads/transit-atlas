@@ -19,12 +19,6 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true
   },
-  appleSubject: {
-    type: String,
-    default: undefined,
-    unique: true,
-    sparse: true
-  },
   emailVerified: {
     type: Boolean,
     default: false

@@ -12,7 +12,6 @@ import { isAllowedOrigin } from '../config/origins.js';
 
 const router = express.Router();
 const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
-const appleKeys = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
 
 router.use((req, res, next) => {
   const origin = req.get('origin');
@@ -26,11 +25,8 @@ router.get('/providers', (req, res) => {
   const settings = getRuntimeSettings();
   const canSignIn = settings.loginEnabled || settings.registrationEnabled;
   res.json({
-  google: canSignIn && settings.googleEnabled && Boolean(process.env.GOOGLE_CLIENT_ID),
-  apple: canSignIn && settings.appleEnabled && Boolean(process.env.APPLE_CLIENT_ID),
-  googleClientId: canSignIn && settings.googleEnabled ? process.env.GOOGLE_CLIENT_ID || null : null,
-  appleClientId: canSignIn && settings.appleEnabled ? process.env.APPLE_CLIENT_ID || null : null,
-  appleRedirectUri: process.env.APPLE_REDIRECT_URI || process.env.APP_BASE_URL || null
+    google: canSignIn && settings.googleEnabled && Boolean(process.env.GOOGLE_CLIENT_ID),
+    googleClientId: canSignIn && settings.googleEnabled ? process.env.GOOGLE_CLIENT_ID || null : null
   });
 });
 
@@ -45,12 +41,12 @@ router.use((req, res, next) => {
   next();
 });
 
-router.post('/oauth/challenge', body('provider').isIn(['google', 'apple']), async (req, res) => {
+router.post('/oauth/challenge', body('provider').equals('google'), async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ error: 'Odaberite dostupnu prijavu.' });
   const { provider } = req.body;
   const settings = getRuntimeSettings();
-  if (!settings[provider === 'google' ? 'googleEnabled' : 'appleEnabled'] || !process.env[provider === 'google' ? 'GOOGLE_CLIENT_ID' : 'APPLE_CLIENT_ID']) {
+  if (!settings.googleEnabled || !process.env.GOOGLE_CLIENT_ID) {
     return res.status(503).json({ error: 'Ova prijava trenutačno nije postavljena.' });
   }
   const challenge = { nonce: randomBytes(32).toString('base64url'), state: randomBytes(24).toString('base64url'), expires: Date.now() + 5 * 60 * 1000 };
@@ -60,10 +56,9 @@ router.post('/oauth/challenge', body('provider').isIn(['google', 'apple']), asyn
 
 router.post('/oauth/:provider',
   body('idToken').isJWT(),
-  body('state').optional().isString().isLength({ min: 20, max: 100 }),
   async (req, res) => {
     const provider = req.params.provider;
-    if (!['google', 'apple'].includes(provider)) return res.status(400).json({ error: 'Nepoznata prijava.' });
+    if (provider !== 'google') return res.status(404).json({ error: 'Nepoznata prijava.' });
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Prijava nije uspjela. Pokušajte ponovno.' });
 
@@ -71,16 +66,15 @@ router.post('/oauth/:provider',
     delete req.session.oauthChallenges?.[provider];
     try {
       await new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
-      if (!challenge || challenge.expires < Date.now() || (provider === 'apple' && req.body.state !== challenge.state)) {
+      if (!challenge || challenge.expires < Date.now()) {
         return res.status(401).json({ error: 'Prijava je istekla. Pokušajte ponovno.' });
       }
 
-      const google = provider === 'google';
-      if (!getRuntimeSettings()[google ? 'googleEnabled' : 'appleEnabled']) return res.status(403).json({ error: 'Ova prijava trenutačno nije dostupna.' });
-      const clientId = process.env[google ? 'GOOGLE_CLIENT_ID' : 'APPLE_CLIENT_ID'];
+      if (!getRuntimeSettings().googleEnabled) return res.status(403).json({ error: 'Ova prijava trenutačno nije dostupna.' });
+      const clientId = process.env.GOOGLE_CLIENT_ID;
       if (!clientId) return res.status(503).json({ error: 'Ova prijava trenutačno nije postavljena.' });
-      const verified = await jwtVerify(req.body.idToken, google ? googleKeys : appleKeys, {
-        issuer: google ? ['https://accounts.google.com', 'accounts.google.com'] : 'https://appleid.apple.com',
+      const verified = await jwtVerify(req.body.idToken, googleKeys, {
+        issuer: ['https://accounts.google.com', 'accounts.google.com'],
         audience: clientId,
         algorithms: ['RS256']
       });
@@ -91,7 +85,7 @@ router.post('/oauth/:provider',
       }
 
       const email = claims.email.toLowerCase();
-      const subjectField = google ? 'googleSubject' : 'appleSubject';
+      const subjectField = 'googleSubject';
       let user = await User.findOne({ [subjectField]: claims.sub });
       const emailUser = await User.findOne({ email });
       if (user && emailUser && String(user._id) !== String(emailUser._id)) {
