@@ -242,7 +242,18 @@ async function loadGtfsData() {
       mkdirSync(dataDir, { recursive: true });
     }
 
-    const response = await fetch(gtfsUrl, { headers: zetStaticHeaders, signal: AbortSignal.timeout(30000) });
+    let response = await fetch(gtfsUrl, { headers: zetStaticHeaders, signal: AbortSignal.timeout(30000) });
+    if (!response.ok) {
+      const listing = await fetch('https://www.zet.hr/gtfs2', { headers: zetStaticHeaders, signal: AbortSignal.timeout(15000) });
+      if (listing.ok) {
+        const html = await listing.text();
+        const latestZip = html.match(/href=["']([^"']*scheduled-\d{3}-\d{6}\.zip)["']/i)?.[1];
+        if (latestZip) {
+          const versionedUrl = new URL(latestZip, 'https://www.zet.hr');
+          response = await fetch(versionedUrl, { headers: zetStaticHeaders, signal: AbortSignal.timeout(30000) });
+        }
+      }
+    }
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
