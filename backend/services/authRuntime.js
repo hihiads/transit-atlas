@@ -7,6 +7,7 @@ import { missingAuthenticationEnvironment } from '../config/runtimeSettings.js';
 import { ensurePasswordPepper } from '../utils/crypto.js';
 
 let sessionMiddleware;
+let sessionCollection;
 
 export function getAuthenticationSessionMiddleware() {
   return sessionMiddleware;
@@ -22,6 +23,7 @@ export async function activateAuthentication() {
     clientPromise: Promise.resolve(mongoose.connection.getClient()),
     touchAfter: 24 * 3600
   });
+  sessionCollection = await store.collectionP;
   sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || createHash('sha256').update(`transit-session:${process.env.ADMIN_PANEL_PASSWORD}`).digest('hex'),
     resave: false,
@@ -31,4 +33,9 @@ export async function activateAuthentication() {
     name: 'sessionId',
     rolling: true
   });
+}
+
+export async function deleteUserSessions(userId) {
+  if (!sessionCollection) return;
+  await sessionCollection.deleteMany({ session: { $regex: `"userId":"${userId}"` } });
 }

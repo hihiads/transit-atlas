@@ -18,6 +18,11 @@ body {
   overflow: hidden;
 }
 
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #f59e0b;
+  outline-offset: 3px;
+}
+
 .leaflet-container {
   width: 100%;
   height: 100%;

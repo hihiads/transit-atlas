@@ -27,3 +27,5 @@ async function send(to, subject, link, action) {
 
 export const sendVerificationEmail = (to, token) => send(to, 'Potvrdite Transitly račun', `/verify-email?token=${encodeURIComponent(token)}`, 'Potvrdite email adresu');
 export const sendPasswordResetEmail = (to, token) => send(to, 'Promjena lozinke za Transitly', `/reset-password?token=${encodeURIComponent(token)}`, 'Promijenite lozinku');
+
+export const sendParentalConsentEmail = (to, token) => send(to, 'Potvrda roditelja/skrbnika za Transitly', `/confirm-parent?token=${encodeURIComponent(token)}`, 'Potvrdite da dopuštate djetetu korištenje Transitlyja');

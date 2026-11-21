@@ -23,6 +23,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  ageRange: { type: String, enum: ['10-15', '16+'], default: null },
+  guardianEmail: { type: String, default: null },
+  guardianConsentAt: { type: Date, default: null },
+  termsVersion: { type: String, default: null },
+  termsAcceptedAt: { type: Date, default: null },
   sessionVersion: {
     type: Number,
     default: 0
@@ -46,10 +51,6 @@ const userSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
-  },
-  lastLogin: {
-    type: Date,
-    default: null
   }
 }, {
   timestamps: true

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createOAuthChallenge, finishOAuth, getOAuthProviders, SignedInUser } from '../../services/auth';
+import { createOAuthChallenge, finishOAuth, getOAuthProviders, RegistrationConsent, SignedInUser } from '../../services/auth';
 
 declare global {
   interface Window {
@@ -30,10 +30,12 @@ function loadGoogleScript(): Promise<void> {
   });
 }
 
-export default function SocialAuthButtons({ onSuccess }: { onSuccess: (user: SignedInUser) => void | Promise<void> }) {
+export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSuccess: (user: SignedInUser) => void | Promise<void>; intent: 'login' | 'register'; consent?: RegistrationConsent }) {
   const googleButton = useRef<HTMLDivElement>(null);
   const [googleEnabled, setGoogleEnabled] = useState<boolean | null>(null);
   const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
+  const [parentToken, setParentToken] = useState('');
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
 
@@ -46,15 +48,24 @@ export default function SocialAuthButtons({ onSuccess }: { onSuccess: (user: Sig
       if (!providers.google || !providers.googleClientId) return;
       await loadGoogleScript();
       const refreshChallenge = async () => {
-        const challenge = await createOAuthChallenge('google');
+        setError('');
+        const challenge = await createOAuthChallenge('google', intent, consent);
         if (!active || !window.google || !googleButton.current) return;
         window.google.accounts.id.initialize({
           client_id: providers.googleClientId!,
           nonce: challenge.nonce,
           callback: async response => {
             try {
+              setError('');
+              setStatus('');
+              setParentToken('');
               const result = await finishOAuth('google', response.credential);
-              if (!result.user) throw new Error('Google nije vratio podatke korisničkog računa. Pokušajte ponovno.');
+              if (!result.user) {
+                setStatus(result.message || 'Provjerite email roditelja ili skrbnika za nastavak registracije.');
+                if (result.parentConsentToken) setParentToken(result.parentConsentToken);
+                void refreshChallenge().catch(() => {});
+                return;
+              }
               await onSuccessRef.current(result.user);
             } catch (cause) {
               setError(cause instanceof Error ? cause.message : 'Google prijava nije uspjela.');
@@ -69,15 +80,17 @@ export default function SocialAuthButtons({ onSuccess }: { onSuccess: (user: Sig
       refreshInterval = window.setInterval(() => void refreshChallenge().catch(() => {}), 4 * 60 * 1000);
     }).catch(cause => active && setError(cause instanceof Error ? cause.message : 'Google prijava trenutačno nije dostupna.'));
     return () => { active = false; if (refreshInterval) window.clearInterval(refreshInterval); };
-  }, []);
+  }, [intent, consent?.termsAccepted, consent?.ageRange, consent?.guardianEmail]);
 
   return (
     <div className="mt-5 space-y-3">
-      <div className="flex items-center gap-3 text-xs text-gray-400"><span className="h-px flex-1 bg-gray-200" /><span>ili nastavite s</span><span className="h-px flex-1 bg-gray-200" /></div>
+      <div className="flex items-center gap-3 text-xs text-gray-600"><span className="h-px flex-1 bg-gray-200" /><span>ili nastavite s</span><span className="h-px flex-1 bg-gray-200" /></div>
       <div ref={googleButton} className="flex min-h-10 justify-center" aria-label="Nastavi s Googleom">
-        {googleEnabled === false && <button type="button" disabled className="h-10 w-full rounded-md border border-gray-200 bg-gray-50 text-sm text-gray-400">Google · trenutačno nedostupan</button>}
+        {googleEnabled === false && <button type="button" disabled className="h-10 w-full rounded-md border border-gray-200 bg-gray-50 text-sm text-gray-600">Google · trenutačno nedostupan</button>}
       </div>
       {error && <p className="text-center text-sm text-red-600" role="alert">{error}</p>}
+      {status && <p className="text-center text-sm text-slate-800" role="status">{status}</p>}
+      {parentToken && <a className="block break-all text-center text-sm font-medium text-blue-800 underline" href={`/confirm-parent?token=${encodeURIComponent(parentToken)}`}>Otvori lokalnu poveznicu za roditelja</a>}
     </div>
   );
 }

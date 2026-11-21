@@ -16,10 +16,16 @@ export async function getOAuthProviders(): Promise<OAuthProviders> {
   return handleResponse<OAuthProviders>(response);
 }
 
-export async function createOAuthChallenge(provider: 'google'): Promise<OAuthChallenge> {
+export interface RegistrationConsent {
+  termsAccepted: boolean;
+  ageRange: '10-15' | '16+' | '';
+  guardianEmail: string;
+}
+
+export async function createOAuthChallenge(provider: 'google', intent: 'login' | 'register' = 'login', consent?: RegistrationConsent): Promise<OAuthChallenge> {
   const response = await fetch(`${API_BASE}/api/auth/oauth/challenge`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-    body: JSON.stringify({ provider })
+    body: JSON.stringify({ provider, intent, ...consent })
   });
   return handleResponse<OAuthChallenge>(response);
 }
@@ -37,7 +43,6 @@ export interface AuthUser {
   email: string;
   emailVerified: boolean;
   createdAt: string;
-  lastLogin?: string;
 }
 
 export interface AuthResponse {
@@ -45,6 +50,8 @@ export interface AuthResponse {
   user?: SignedInUser;
   verificationToken?: string;
   resetToken?: string;
+  parentConsentRequired?: boolean;
+  parentConsentToken?: string;
 }
 
 export type SignedInUser = Pick<AuthUser, 'id' | 'email' | 'emailVerified'>;
@@ -62,12 +69,20 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data;
 }
 
-export async function register(email: string, password: string, turnstileToken: string): Promise<AuthResponse> {
+export async function register(email: string, password: string, turnstileToken: string, consent: RegistrationConsent): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ email, password, turnstileToken })
+    body: JSON.stringify({ email, password, turnstileToken, ...consent })
+  });
+  return handleResponse<AuthResponse>(response);
+}
+
+export async function confirmParentConsent(token: string): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE}/api/auth/parent-consent`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+    body: JSON.stringify({ token, consent: true })
   });
   return handleResponse<AuthResponse>(response);
 }
@@ -96,6 +111,11 @@ export async function logout(): Promise<void> {
     method: 'POST',
     credentials: 'include'
   });
+  await handleResponse<{ message: string }>(response);
+}
+
+export async function deleteCurrentAccount(): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/auth/me`, { method: 'DELETE', credentials: 'include' });
   await handleResponse<{ message: string }>(response);
 }
 

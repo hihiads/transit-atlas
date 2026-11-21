@@ -169,7 +169,7 @@ async function indexGtfsStopTimes(filePath, trips) {
     if (![hour, minute, second].every(Number.isFinite)) continue;
     let entries = grouped.get(String(row.stop_id));
     if (!entries) grouped.set(String(row.stop_id), entries = []);
-    entries.push(tripIndex, hour * 3600 + minute * 60 + second);
+    entries.push(tripIndex, hour * 3600 + minute * 60 + second, Number(row.stop_sequence) || 0);
     count++;
     if (count % 250000 === 0) console.log(`[GTFS Static] stop_times: indeksirano ${count} redaka`);
   }
@@ -183,14 +183,15 @@ async function indexGtfsStopTimes(filePath, trips) {
 function* stopTimesForStop(data, stopId) {
   if (data.stopTimesByStop instanceof Map) {
     const entries = data.stopTimesByStop.get(stopId) || [];
-    for (let index = 0; index < entries.length; index += 2) {
+    for (let index = 0; index < entries.length; index += 3) {
       const seconds = entries[index + 1];
       const hour = Math.floor(seconds / 3600);
       const minute = Math.floor((seconds % 3600) / 60);
       const second = seconds % 60;
       yield {
         trip_id: data.trips[entries[index]]?.trip_id,
-        departure_time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`
+        departure_time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`,
+        stop_sequence: entries[index + 2]
       };
     }
     return;
@@ -202,6 +203,44 @@ function* stopTimesForStop(data, stopId) {
 
 function stopTimeCount(data) {
   return data.stopTimesByStop instanceof Map ? data.stopTimeCount : data.stopTimes.length;
+}
+
+const zagrebDateTimeFormat = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Zagreb', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+});
+const zagrebClockFormat = new Intl.DateTimeFormat('hr-HR', {
+  timeZone: 'Europe/Zagreb', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+});
+
+function zagrebDateParts(date) {
+  return Object.fromEntries(zagrebDateTimeFormat.formatToParts(date).map(({ type, value }) => [type, Number(value)]));
+}
+
+function zagrebTimeToEpoch({ year, month, day, hour, minute, second }) {
+  const wallTime = Date.UTC(year, month - 1, day, hour, minute, second);
+  let timestamp = wallTime;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const local = zagrebDateParts(new Date(timestamp));
+    const displayedWallTime = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute, local.second);
+    const adjusted = timestamp + wallTime - displayedWallTime;
+    if (adjusted === timestamp) break;
+    timestamp = adjusted;
+  }
+  return timestamp;
+}
+
+function addCalendarDays({ year, month, day }, amount) {
+  const date = new Date(Date.UTC(year, month - 1, day + amount));
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+}
+
+function metersBetween(lat1, lon1, lat2, lon2) {
+  const radians = degrees => degrees * Math.PI / 180;
+  const dLat = radians(lat2 - lat1);
+  const dLon = radians(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function dayNumber(date) {
@@ -437,12 +476,30 @@ async function fetchRealtimeVehiclesFromZet() {
 
     rtFeedStatus = 'active';
     const vehicles = [];
+    const tripUpdatesByStop = new Map();
+    const cancelledTrips = new Set();
     let staleCount = 0;
     const feedTimestamp = feed.header?.timestamp ? Number(feed.header.timestamp) * 1000 : Date.now();
     const routesById = new Map(gtfsData.routes.map(item => [String(item.route_id).trim(), item]));
     const tripsById = new Map(gtfsData.trips.map(item => [String(item.trip_id).trim(), item]));
 
     for (const entity of feed.entity) {
+      const tripUpdate = entity.tripUpdate;
+      const updatedTripId = String(tripUpdate?.trip?.tripId || '').trim();
+      if (updatedTripId) {
+        if (Number(tripUpdate.trip.scheduleRelationship) === 3) cancelledTrips.add(updatedTripId);
+        for (const update of tripUpdate.stopTimeUpdate || []) {
+          const stopId = String(update.stopId || '').trim();
+          if (!stopId) continue;
+          const time = update.departure?.time ?? update.arrival?.time;
+          tripUpdatesByStop.set(`${updatedTripId}:${stopId}`, {
+            timestamp: time == null ? null : Number(time) * 1000,
+            delay: update.departure?.delay ?? update.arrival?.delay ?? null,
+            scheduleRelationship: Number(update.scheduleRelationship ?? 0)
+          });
+        }
+      }
+
       if (entity.vehicle && entity.vehicle.position) {
         const vehicle = entity.vehicle;
         const pos = vehicle.position;
@@ -484,8 +541,9 @@ async function fetchRealtimeVehiclesFromZet() {
           lastUpdate,
           garageNumber: vehicle.vehicle?.label || null,
           registrationNumber: vehicle.vehicle?.licensePlate || null,
-          currentStopSequence: vehicle.currentStopSequence || null,
+          currentStopSequence: vehicle.currentStopSequence ?? null,
           currentStatus: vehicle.currentStatus || null,
+          speed: pos.speed == null ? null : Number(pos.speed),
           tripId: vehicle.trip?.tripId || null,
           routeId: vehicle.trip?.routeId || null,
           source: 'realtime'
@@ -495,7 +553,8 @@ async function fetchRealtimeVehiclesFromZet() {
 
     staleVehiclesDropped = staleCount;
     console.log(`[GTFS-RT] ✓ Učitano ${vehicles.length} vozila`);
-    return { vehicles, staleVehiclesDropped: staleCount };
+    const vehiclesByTrip = new Map(vehicles.filter(vehicle => vehicle.tripId).map(vehicle => [String(vehicle.tripId), vehicle]));
+    return { vehicles, vehiclesByTrip, tripUpdatesByStop, cancelledTrips, staleVehiclesDropped: staleCount };
   } catch (error) {
     rtFeedStatus = `greška: ${error.message}`;
     console.error(`[GTFS-RT] ✗ ${error.message}`);
@@ -641,11 +700,12 @@ app.get('/api/vehicles/:cityId', async (req, res) => {
 });
 
 // Polasci sa stanice
-app.get('/api/:cityId/stop/:stopId/departures', (req, res) => {
+app.get('/api/:cityId/stop/:stopId/departures', async (req, res) => {
   const { cityId, stopId } = req.params;
   const data = cityId === 'hzpp' ? hzppData : cityId === 'beograd' ? beogradData : gtfsData;
   const loaded = cityId === 'hzpp' ? hzppLoaded : cityId === 'beograd' ? beogradLoaded : gtfsLoaded;
 
+  if (!['zagreb', 'hzpp', 'beograd'].includes(cityId)) return res.status(404).json({ error: 'Mreža nije pronađena' });
   if (!loaded) {
     return res.status(503).json({ error: 'GTFS podaci nisu učitani' });
   }
@@ -655,12 +715,11 @@ app.get('/api/:cityId/stop/:stopId/departures', (req, res) => {
     return res.status(404).json({ error: 'Stanica nije pronađena' });
   }
 
-  if (!['zagreb', 'hzpp', 'beograd'].includes(cityId)) return res.status(404).json({ error: 'Mreža nije pronađena' });
-  const now = new Date();
-  const dateKey = date => `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+  const now = Date.now();
+  const dateKey = date => `${date.year}${String(date.month).padStart(2, '0')}${String(date.day).padStart(2, '0')}`;
   const activeServicesOn = date => {
     const ymd = dateKey(date);
-    const weekday = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][date.getDay()];
+    const weekday = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay()];
     const active = new Set(data.calendar.filter(x => ymd >= String(x.start_date) && ymd <= String(x.end_date) && String(x[weekday]) === '1').map(x => String(x.service_id)));
     for (const row of data.calendarDates.filter(x => String(x.date) === ymd)) {
       if (String(row.exception_type) === '1') active.add(String(row.service_id));
@@ -668,10 +727,13 @@ app.get('/api/:cityId/stop/:stopId/departures', (req, res) => {
     }
     return active;
   };
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const serviceDays = [today, new Date(today.getTime() - 86400000)].map(date => ({ date, active: activeServicesOn(date) }));
+  const today = zagrebDateParts(new Date(now));
+  const serviceDays = [today, addCalendarDays(today, -1)].map(date => ({ date, active: activeServicesOn(date) }));
   const tripsById = new Map(data.trips.map(t => [String(t.trip_id), t]));
   const routesById = new Map(data.routes.map(r => [String(r.route_id), r]));
+  const realtime = cityId === 'zagreb' ? await fetchRealtimeVehicles() : null;
+  const stopLat = Number(stop.stop_lat);
+  const stopLon = Number(stop.stop_lon);
   const departures = [];
   for (const st of stopTimesForStop(data, stopId)) {
     if (!st.departure_time) continue;
@@ -681,22 +743,61 @@ app.get('/api/:cityId/stop/:stopId/departures', (req, res) => {
     if (![rawHour, minute, second].every(Number.isFinite)) continue;
     for (const serviceDay of serviceDays) {
       if (!serviceDay.active.has(String(trip.service_id))) continue;
-      const actual = new Date(serviceDay.date);
-      actual.setDate(actual.getDate() + Math.floor(rawHour / 24));
-      actual.setHours(rawHour % 24, minute, second, 0);
-      if (actual < now || actual > new Date(now.getTime() + 24 * 60 * 60 * 1000)) continue;
+      const wallTime = new Date(Date.UTC(serviceDay.date.year, serviceDay.date.month - 1, serviceDay.date.day) + (rawHour * 3600 + minute * 60 + second) * 1000);
+      const scheduledAt = zagrebTimeToEpoch({
+        year: wallTime.getUTCFullYear(), month: wallTime.getUTCMonth() + 1, day: wallTime.getUTCDate(),
+        hour: wallTime.getUTCHours(), minute: wallTime.getUTCMinutes(), second: wallTime.getUTCSeconds()
+      });
+      if (scheduledAt > now + 24 * 60 * 60 * 1000) continue;
+      const tripId = String(st.trip_id);
+      if (realtime?.cancelledTrips.has(tripId)) continue;
       const route = routesById.get(String(trip.route_id));
+      const routeType = Number(route?.route_type);
+      const type = routeType === 0 ? 'tram' : routeType === 3 ? 'bus' : 'unknown';
+      const stopUpdate = realtime?.tripUpdatesByStop.get(`${tripId}:${stopId}`);
+      if (stopUpdate?.scheduleRelationship === 6) continue;
+
+      let timestamp = scheduledAt;
+      let source = 'scheduled';
+      if (stopUpdate && stopUpdate.scheduleRelationship !== 7) {
+        if (stopUpdate.timestamp !== null && Number.isFinite(stopUpdate.timestamp)) {
+          timestamp = stopUpdate.timestamp;
+          source = 'live';
+        } else if (stopUpdate.delay !== null && Number.isFinite(Number(stopUpdate.delay))) {
+          timestamp = scheduledAt + Number(stopUpdate.delay) * 1000;
+          source = 'live';
+        }
+      }
+
+      const vehicle = source === 'scheduled' ? realtime?.vehiclesByTrip.get(tripId) : null;
+      if (vehicle && scheduledAt >= now - 3 * 60 * 1000 && scheduledAt <= now + 12 * 60 * 1000 &&
+          Date.now() - vehicle.lastUpdate <= 2 * 60 * 1000 &&
+          !(Number(vehicle.currentStopSequence) > 0 && Number(st.stop_sequence) > 0 && Number(vehicle.currentStopSequence) > Number(st.stop_sequence))) {
+        const distance = metersBetween(vehicle.lat, vehicle.lon, stopLat, stopLon);
+        if (distance <= 12000) {
+          const measuredSpeed = Number(vehicle.speed);
+          const speed = measuredSpeed > 2 ? measuredSpeed : type === 'tram' ? 5.5 : 4.2;
+          const estimate = now + Math.max(45, distance * 1.35 / speed) * 1000;
+          if (estimate <= now + 60 * 60 * 1000) {
+            timestamp = estimate;
+            source = 'estimated';
+          }
+        }
+      }
+
+      if (timestamp <= now) continue;
       departures.push({
-        time: `${String(actual.getHours()).padStart(2, '0')}:${String(actual.getMinutes()).padStart(2, '0')}:${String(actual.getSeconds()).padStart(2, '0')}`,
+        time: zagrebClockFormat.format(new Date(timestamp)),
+        timestamp,
+        source,
+        type,
         route: route?.route_short_name || 'N/A',
         direction: trip.trip_headsign || 'Nepoznato',
-        tripId: String(st.trip_id),
-        timestamp: actual.getTime()
+        tripId
       });
     }
   }
   departures.sort((a, b) => a.timestamp - b.timestamp);
-  for (const departure of departures) delete departure.timestamp;
   const ymd = dateKey(today);
   res.json({
     stop: {
@@ -706,8 +807,13 @@ app.get('/api/:cityId/stop/:stopId/departures', (req, res) => {
       lon: parseFloat(stop.stop_lon)
     },
     departures: departures.slice(0, 50),
-    serviceDate: ymd, realtime: cityId === 'zagreb' ? 'vehicle_positions_only' : 'unavailable',
-    message: cityId === 'beograd' ? 'Polasci su iz službenog GTFS rasporeda; live predviđanja nisu dostupna.' : cityId === 'hzpp' ? 'HŽPP GTFS sadrži vozni red; live kašnjenja trenutno nisu dostupna.' : 'ZET live vozila dostupna su, ali feed ne potvrđuje kašnjenje polaska.'
+    serviceDate: ymd,
+    realtime: realtime?.tripUpdatesByStop.size ? 'trip_updates' : realtime ? 'vehicle_positions' : 'unavailable',
+    message: realtime?.tripUpdatesByStop.size
+      ? 'Polasci s oznakom Uživo koriste ZET-ove GTFS-Realtime podatke; Procjena uživo koristi lokaciju vozila.'
+      : realtime
+        ? 'ZET ne šalje predviđanje za svako stajalište; Procjena uživo koristi lokaciju vozila, ostalo je po rasporedu.'
+        : 'Prikazan je službeni vozni red.'
   });
 });
 
@@ -748,7 +854,7 @@ app.get('/', (req, res) => {
   }
   res.sendFile(indexPath);
 });
-app.get(['/verify-email', '/reset-password'], (req, res) => {
+app.get(['/verify-email', '/reset-password', '/confirm-parent', '/privacy', '/terms', '/cookies'], (req, res) => {
   const indexPath = join(frontendDist, 'index.html');
   if (!existsSync(indexPath)) return res.status(503).send('Frontend nije izgrađen. Pokrenite npm run build.');
   res.sendFile(indexPath);

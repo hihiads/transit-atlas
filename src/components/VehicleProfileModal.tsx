@@ -60,7 +60,7 @@ export default function VehicleProfileModal({ vehicleId, onClose }: VehicleProfi
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-600 hover:text-gray-600 transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -105,17 +105,17 @@ export default function VehicleProfileModal({ vehicleId, onClose }: VehicleProfi
                       {profile.details.features.lowFloor ? (
                         <span className="text-green-600 font-medium">Da</span>
                       ) : (
-                        <span className="text-gray-400">Ne</span>
+                        <span className="text-gray-600">Ne</span>
                       )}
                     </div>
                   )}
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700">Klimatizacija</span>
-                    <span className="text-gray-400">{profile.details.features.airConditioning || 'Podatak nije dostupan'}</span>
+                    <span className="text-gray-600">{profile.details.features.airConditioning || 'Podatak nije dostupan'}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700">WiFi</span>
-                    <span className="text-gray-400">{profile.details.features.wifi || 'Podatak nije dostupan'}</span>
+                    <span className="text-gray-600">{profile.details.features.wifi || 'Podatak nije dostupan'}</span>
                   </div>
                   {profile.details.capacity && (
                     <div className="flex items-center justify-between">

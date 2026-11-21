@@ -78,6 +78,7 @@ export default function MapView({
   };
 
   return (
+    <div role="region" aria-label="Interaktivna karta javnog prijevoza. Koristite kontrole za zumiranje i pomicanje karte." className="h-full w-full">
     <MapContainer
       center={center}
       zoom={zoom}
@@ -113,7 +114,19 @@ export default function MapView({
             weight: 2
           }}
           eventHandlers={{
-            click: () => onStopClick(stop)
+            click: () => onStopClick(stop),
+            add: (event) => {
+              const path = event.target.getElement() as SVGElement;
+              path.setAttribute('tabindex', '0');
+              path.setAttribute('role', 'button');
+              path.setAttribute('aria-label', `Otvori stajalište ${stop.name}`);
+              path.addEventListener('keydown', (keyEvent) => {
+                if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+                  keyEvent.preventDefault();
+                  onStopClick(stop);
+                }
+              });
+            }
           }}
         >
           <Popup>
@@ -137,6 +150,8 @@ export default function MapView({
           key={vehicle.id}
           position={[vehicle.lat, vehicle.lon]}
           icon={vehicle.type === 'bus' ? busIcon : vehicle.type === 'tram' ? tramIcon : unknownIcon}
+          title={`${vehicle.type === 'tram' ? 'Tramvaj' : vehicle.type === 'bus' ? 'Autobus' : 'Vozilo'} linije ${vehicle.line}, smjer ${vehicle.direction}`}
+          alt={`${vehicle.type === 'tram' ? 'Tramvaj' : vehicle.type === 'bus' ? 'Autobus' : 'Vozilo'} linije ${vehicle.line}`}
           eventHandlers={{
             click: () => onVehicleClick(vehicle)
           }}
@@ -151,7 +166,7 @@ export default function MapView({
                   Vozilo: {vehicle.garageNumber}
                 </div>
               )}
-              <div className="text-xs text-gray-400 mt-1">
+              <div className="text-xs text-gray-600 mt-1">
                 {formatLastUpdate(vehicle.lastUpdate)}
               </div>
             </div>
@@ -159,5 +174,6 @@ export default function MapView({
         </Marker>
       ))}
     </MapContainer>
+    </div>
   );
 }

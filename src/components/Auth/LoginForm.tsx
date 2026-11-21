@@ -86,13 +86,13 @@ export default function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToFor
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
           {loading ? 'Prijava...' : 'Prijavi se'}
         </button>
       </form>
 
-      <SocialAuthButtons onSuccess={onSuccess} />
+      <SocialAuthButtons onSuccess={onSuccess} intent="login" />
 
       {allowRegister && <div className="mt-6 text-center text-sm text-gray-600">
         Nemate račun?{' '}

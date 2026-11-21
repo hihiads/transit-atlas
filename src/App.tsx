@@ -8,6 +8,7 @@ import AuthModal from './components/Auth/AuthModal';
 import { api, AuthStatus } from './api';
 import { useAuth } from './contexts/AuthContext';
 import { Vehicle, City, Route, Stop, TransitShape } from './types';
+import CookieNotice from './components/CookieNotice';
 
 function App() {
   const { user } = useAuth();
@@ -464,7 +465,7 @@ function App() {
               </div>
               <button
                 onClick={() => setSelectedStop(null)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-600 hover:text-gray-600 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -495,6 +496,7 @@ function App() {
       {showAuthModal && (
         <AuthModal onClose={() => setShowAuthModal(false)} loginEnabled={authStatus.loginEnabled} registrationEnabled={authStatus.registrationEnabled} />
       )}
+      <CookieNotice />
     </div>
   );
 }

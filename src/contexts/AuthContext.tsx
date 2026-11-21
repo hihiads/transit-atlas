@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getCurrentUser, logout as logoutService, SignedInUser } from '../services/auth';
+import { deleteCurrentAccount as deleteAccountService, getCurrentUser, logout as logoutService, SignedInUser } from '../services/auth';
 
 interface AuthUser {
   id: string;
@@ -12,6 +12,7 @@ interface AuthContextType {
   loading: boolean;
   login: (user?: SignedInUser) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -44,8 +45,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  async function deleteAccount() {
+    if (!user) return;
+    await deleteAccountService();
+    for (const key of ['tracked', 'favorite-routes', 'favorite-stops']) localStorage.removeItem(`transit-atlas-${key}:${user.id}`);
+    setUser(null);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, deleteAccount, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

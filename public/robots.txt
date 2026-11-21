@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /admin
 
-Sitemap: https://transit-atlas.onrender.com/sitemap.xml
+Sitemap: https://transitly.eu/sitemap.xml

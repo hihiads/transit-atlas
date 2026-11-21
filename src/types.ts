@@ -44,6 +44,9 @@ export interface TransitShape {
 }
 
 export interface Departure {
+  timestamp: number;
+  source: 'scheduled' | 'live' | 'estimated';
+  type: 'bus' | 'tram' | 'unknown';
   time: string;
   route: string;
   direction: string;

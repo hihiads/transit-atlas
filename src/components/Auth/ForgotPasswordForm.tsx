@@ -140,7 +140,7 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
         <button
           type="submit"
           disabled={loading || !turnstileToken}
-          className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
           {loading ? 'Slanje...' : 'Pošalji upute'}
         </button>
