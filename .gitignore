@@ -9,3 +9,4 @@ gtfs_data
 .claude/
 backend/data/
 .DS_Store
+.env
