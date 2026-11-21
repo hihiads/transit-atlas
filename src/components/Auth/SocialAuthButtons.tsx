@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createOAuthChallenge, finishOAuth, getOAuthProviders } from '../../services/auth';
+import { createOAuthChallenge, finishOAuth, getOAuthProviders, SignedInUser } from '../../services/auth';
 
 declare global {
   interface Window {
@@ -30,7 +30,7 @@ function loadGoogleScript(): Promise<void> {
   });
 }
 
-export default function SocialAuthButtons({ onSuccess }: { onSuccess: () => void }) {
+export default function SocialAuthButtons({ onSuccess }: { onSuccess: (user: SignedInUser) => void | Promise<void> }) {
   const googleButton = useRef<HTMLDivElement>(null);
   const [googleEnabled, setGoogleEnabled] = useState<boolean | null>(null);
   const [error, setError] = useState('');
@@ -53,8 +53,9 @@ export default function SocialAuthButtons({ onSuccess }: { onSuccess: () => void
           nonce: challenge.nonce,
           callback: async response => {
             try {
-              await finishOAuth('google', response.credential);
-              onSuccessRef.current();
+              const result = await finishOAuth('google', response.credential);
+              if (!result.user) throw new Error('Google nije vratio podatke korisničkog računa. Pokušajte ponovno.');
+              await onSuccessRef.current(result.user);
             } catch (cause) {
               setError(cause instanceof Error ? cause.message : 'Google prijava nije uspjela.');
               void refreshChallenge().catch(() => {});

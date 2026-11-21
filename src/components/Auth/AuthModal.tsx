@@ -2,8 +2,7 @@ import { useState } from 'react';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import ForgotPasswordForm from './ForgotPasswordForm';
-import { verifyEmail } from '../../services/auth';
-import { resetPassword } from '../../services/auth';
+import { resetPassword, SignedInUser, verifyEmail } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface AuthModalProps {
@@ -20,8 +19,8 @@ export default function AuthModal({ onClose, loginEnabled, registrationEnabled }
   const [verificationMessage, setVerificationMessage] = useState('Potvrdite email adresu za dovršetak registracije.');
   const { login } = useAuth();
 
-  async function handleSuccess() {
-    await login();
+  async function handleSuccess(user?: SignedInUser) {
+    await login(user);
     onClose();
   }
 

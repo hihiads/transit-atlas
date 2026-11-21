@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getCurrentUser, logout as logoutService } from '../services/auth';
+import { getCurrentUser, logout as logoutService, SignedInUser } from '../services/auth';
 
 interface AuthUser {
   id: string;
@@ -10,7 +10,7 @@ interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  login: () => Promise<void>;
+  login: (user?: SignedInUser) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -34,8 +34,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser().finally(() => setLoading(false));
   }, []);
 
-  async function login() {
-    await refreshUser();
+  async function login(signedInUser?: SignedInUser) {
+    if (signedInUser) setUser(signedInUser);
+    else await refreshUser();
   }
 
   async function logout() {

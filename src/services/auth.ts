@@ -42,10 +42,12 @@ export interface AuthUser {
 
 export interface AuthResponse {
   message: string;
-  user?: AuthUser;
+  user?: SignedInUser;
   verificationToken?: string;
   resetToken?: string;
 }
+
+export type SignedInUser = Pick<AuthUser, 'id' | 'email' | 'emailVerified'>;
 
 export interface AuthError {
   error: string;

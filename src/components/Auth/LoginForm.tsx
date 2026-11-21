@@ -1,9 +1,9 @@
 import { useState, FormEvent } from 'react';
-import { login } from '../../services/auth';
+import { login, SignedInUser } from '../../services/auth';
 import SocialAuthButtons from './SocialAuthButtons';
 
 interface LoginFormProps {
-  onSuccess: () => void;
+  onSuccess: (user?: SignedInUser) => void | Promise<void>;
   onSwitchToRegister: () => void;
   onSwitchToForgotPassword: () => void;
   allowRegister: boolean;

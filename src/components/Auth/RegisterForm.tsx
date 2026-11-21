@@ -1,10 +1,10 @@
 import { useState, FormEvent, useEffect, useRef } from 'react';
-import { register } from '../../services/auth';
+import { register, SignedInUser } from '../../services/auth';
 import SocialAuthButtons from './SocialAuthButtons';
 
 interface RegisterFormProps {
   onSuccess: (verificationToken?: string) => void;
-  onSocialSuccess: () => void;
+  onSocialSuccess: (user: SignedInUser) => void | Promise<void>;
   onSwitchToLogin: () => void;
   allowLogin: boolean;
 }
