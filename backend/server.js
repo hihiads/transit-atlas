@@ -111,8 +111,25 @@ let lastGtfsUpdate = null;
 let gtfsLoaded = false;
 let gtfsLoadError = null;
 let gtfsLoadInProgress = false;
+let gtfsRetryDelay = 60 * 1000;
+let gtfsRetryTimer = null;
 let rtFeedStatus = 'unknown';
 let staleVehiclesDropped = 0;
+let realtimeCache = null;
+let realtimeCacheTime = 0;
+let realtimeFetchPromise = null;
+let realtimeRetryAfter = 0;
+
+const zetStaticHeaders = {
+  'User-Agent': 'Transitly/1.0 (+https://transitly.eu)',
+  Referer: 'https://www.zet.hr/gtfs2',
+  Accept: 'application/zip, application/octet-stream, */*'
+};
+const zetRealtimeHeaders = {
+  'User-Agent': 'Transitly/1.0 (+https://transitly.eu)',
+  Referer: 'https://www.zet.hr/gtfs2',
+  Accept: 'application/x-protobuf, application/octet-stream, */*'
+};
 
 // Helper funkcija za parsiranje GTFS CSV
 function parseGtfsCsv(csvText) {
@@ -225,7 +242,7 @@ async function loadGtfsData() {
       mkdirSync(dataDir, { recursive: true });
     }
 
-    const response = await fetch(gtfsUrl, { signal: AbortSignal.timeout(30000) });
+    const response = await fetch(gtfsUrl, { headers: zetStaticHeaders, signal: AbortSignal.timeout(30000) });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -269,15 +286,31 @@ async function loadGtfsData() {
       }
     }
 
+    if (!gtfsData.routes.length || !gtfsData.trips.length) {
+      throw new Error('GTFS feed nema ispravne routes.txt i trips.txt podatke');
+    }
+
     lastGtfsUpdate = new Date();
     gtfsLoaded = true;
     gtfsLoadError = null;
+    gtfsRetryDelay = 60 * 1000;
+    if (gtfsRetryTimer) clearTimeout(gtfsRetryTimer);
+    gtfsRetryTimer = null;
     console.log(`[GTFS Static] ✓ Podaci uspješno učitani: ${gtfsData.routes.length} linija, ${gtfsData.stops.length} stanica`);
 
   } catch (error) {
     console.error(`[GTFS Static] ✗ Greška: ${error.message}`);
     gtfsLoadError = error.message;
     gtfsLoaded = false;
+    if (!gtfsRetryTimer) {
+      const delay = gtfsRetryDelay;
+      gtfsRetryDelay = Math.min(gtfsRetryDelay * 2, 30 * 60 * 1000);
+      gtfsRetryTimer = setTimeout(() => {
+        gtfsRetryTimer = null;
+        void loadGtfsData();
+      }, delay);
+      gtfsRetryTimer.unref?.();
+    }
   } finally {
     gtfsLoadInProgress = false;
   }
@@ -354,11 +387,33 @@ setInterval(loadGtfsData, 24 * 60 * 60 * 1000);
 
 // Dohvati GTFS-Realtime vozila
 async function fetchRealtimeVehicles() {
+  const now = Date.now();
+  if (realtimeCache && now - realtimeCacheTime < 15_000) return realtimeCache;
+  if (realtimeFetchPromise) return realtimeFetchPromise;
+  if (now < realtimeRetryAfter) return null;
+
+  realtimeFetchPromise = fetchRealtimeVehiclesFromZet();
+  try {
+    const result = await realtimeFetchPromise;
+    if (result) {
+      realtimeCache = result;
+      realtimeCacheTime = Date.now();
+      realtimeRetryAfter = 0;
+    } else {
+      realtimeRetryAfter = Date.now() + 10_000;
+    }
+    return result;
+  } finally {
+    realtimeFetchPromise = null;
+  }
+}
+
+async function fetchRealtimeVehiclesFromZet() {
   const rtUrl = 'https://www.zet.hr/gtfs-rt-protobuf';
   staleVehiclesDropped = 0;
 
   try {
-    const response = await fetch(rtUrl, { timeout: 10000 });
+    const response = await fetch(rtUrl, { headers: zetRealtimeHeaders, signal: AbortSignal.timeout(10000) });
     if (!response.ok) {
       rtFeedStatus = `HTTP ${response.status}`;
       throw new Error(`HTTP ${response.status}`);
@@ -373,6 +428,8 @@ async function fetchRealtimeVehicles() {
     const vehicles = [];
     let staleCount = 0;
     const feedTimestamp = feed.header?.timestamp ? Number(feed.header.timestamp) * 1000 : Date.now();
+    const routesById = new Map(gtfsData.routes.map(item => [String(item.route_id).trim(), item]));
+    const tripsById = new Map(gtfsData.trips.map(item => [String(item.trip_id).trim(), item]));
 
     for (const entity of feed.entity) {
       if (entity.vehicle && entity.vehicle.position) {
@@ -396,12 +453,9 @@ async function fetchRealtimeVehicles() {
           }
         }
 
-        let route = null;
-        let trip = null;
-        if (vehicle.trip?.routeId && gtfsData.routes.length && gtfsData.trips.length) {
-          route = gtfsData.routes.find(r => r.route_id === vehicle.trip.routeId);
-          trip = gtfsData.trips.find(t => t.trip_id === vehicle.trip?.tripId);
-        }
+        const route = routesById.get(String(vehicle.trip?.routeId || '').trim());
+        const trip = tripsById.get(String(vehicle.trip?.tripId || '').trim());
+        const routeType = Number(route?.route_type);
 
         const lastUpdate = vehicle.timestamp ? Number(vehicle.timestamp) * 1000 : feedTimestamp;
         if (Date.now() - lastUpdate > 10 * 60 * 1000) {
@@ -411,7 +465,7 @@ async function fetchRealtimeVehicles() {
 
         vehicles.push({
           id: vehicleId,
-          type: route?.route_type === '0' ? 'tram' : 'bus',
+          type: routeType === 0 ? 'tram' : routeType === 3 ? 'bus' : 'unknown',
           line: route?.route_short_name || vehicle.trip?.routeId || 'N/A',
           direction: trip?.trip_headsign || route?.route_long_name || 'Nepoznato',
           lat: pos.latitude,

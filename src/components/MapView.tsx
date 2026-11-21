@@ -26,6 +26,13 @@ const tramIcon = L.divIcon({
   iconAnchor: [16, 16]
 });
 
+const unknownIcon = L.divIcon({
+  className: 'custom-marker',
+  html: '<div class="w-8 h-8 bg-slate-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold">?</div>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16]
+});
+
 interface MapViewProps {
   vehicles: Vehicle[];
   stops: Stop[];
@@ -129,7 +136,7 @@ export default function MapView({
         <Marker
           key={vehicle.id}
           position={[vehicle.lat, vehicle.lon]}
-          icon={vehicle.type === 'bus' ? busIcon : tramIcon}
+          icon={vehicle.type === 'bus' ? busIcon : vehicle.type === 'tram' ? tramIcon : unknownIcon}
           eventHandlers={{
             click: () => onVehicleClick(vehicle)
           }}
@@ -137,6 +144,7 @@ export default function MapView({
           <Popup>
             <div className="p-2">
               <div className="font-bold text-lg">Linija {vehicle.line}</div>
+              <div className="text-xs font-medium text-gray-500">{vehicle.type === 'tram' ? 'Tramvaj' : vehicle.type === 'bus' ? 'Autobus' : 'Tip vozila nije dostupan'}</div>
               <div className="text-sm text-gray-600">{vehicle.direction}</div>
               {vehicle.garageNumber && (
                 <div className="text-xs text-gray-500 mt-1">

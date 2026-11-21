@@ -1,6 +1,6 @@
 export interface Vehicle {
   id: string;
-  type: 'bus' | 'tram';
+  type: 'bus' | 'tram' | 'unknown';
   line: string;
   direction: string;
   lat: number;
