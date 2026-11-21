@@ -6,9 +6,11 @@ import VehicleCard from './components/VehicleCard';
 import SchedulePanel from './components/SchedulePanel';
 import AuthModal from './components/Auth/AuthModal';
 import { api, AuthStatus } from './api';
+import { useAuth } from './contexts/AuthContext';
 import { Vehicle, City, Route, Stop, TransitShape } from './types';
 
 function App() {
+  const { user } = useAuth();
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -43,7 +45,8 @@ function App() {
   useEffect(() => {
     const checkTrackedDepartures = () => {
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
-      const tracked: string[] = JSON.parse(localStorage.getItem('transit-atlas-tracked') || '[]');
+      if (!user) return;
+      const tracked: string[] = JSON.parse(localStorage.getItem(`transit-atlas-tracked:${user.id}`) || '[]');
       const now = new Date();
       for (const item of tracked) {
         const time = item.split(':').slice(-3).join(':');
@@ -63,7 +66,7 @@ function App() {
     checkTrackedDepartures();
     const interval = setInterval(checkTrackedDepartures, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     api.getAuthStatus().then(setAuthStatus).catch(() => {}).finally(() => setAuthStatusLoading(false));
@@ -485,6 +488,7 @@ function App() {
           cityId={selectedCity.id}
           initialStopId={selectedStop?.id}
           onClose={() => setShowSchedule(false)}
+          onRequireLogin={() => setShowAuthModal(true)}
         />
       )}
 

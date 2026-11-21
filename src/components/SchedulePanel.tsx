@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Route, Stop, Departure } from '../types';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SchedulePanelProps {
   cityId: string;
   initialStopId?: string;
   onClose: () => void;
+  onRequireLogin: () => void;
 }
 
-export default function SchedulePanel({ cityId, initialStopId, onClose }: SchedulePanelProps) {
+export default function SchedulePanel({ cityId, initialStopId, onClose, onRequireLogin }: SchedulePanelProps) {
+  const { user } = useAuth();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [stops, setStops] = useState<Stop[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>('');
@@ -19,8 +22,16 @@ export default function SchedulePanel({ cityId, initialStopId, onClose }: Schedu
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'route' | 'stop'>(initialStopId ? 'stop' : 'route');
-  const [tracked, setTracked] = useState<string[]>(() => JSON.parse(localStorage.getItem('transit-atlas-tracked') || '[]'));
+  const [tracked, setTracked] = useState<string[]>([]);
+  const [favoriteRoutes, setFavoriteRoutes] = useState<string[]>([]);
+  const [favoriteStops, setFavoriteStops] = useState<string[]>([]);
   const [departureMessage, setDepartureMessage] = useState('');
+
+  useEffect(() => {
+    setTracked(user ? JSON.parse(localStorage.getItem(`transit-atlas-tracked:${user.id}`) || '[]') : []);
+    setFavoriteRoutes(user ? JSON.parse(localStorage.getItem(`transit-atlas-favorite-routes:${user.id}`) || '[]') : []);
+    setFavoriteStops(user ? JSON.parse(localStorage.getItem(`transit-atlas-favorite-stops:${user.id}`) || '[]') : []);
+  }, [user]);
 
   useEffect(() => {
     Promise.all([
@@ -60,13 +71,24 @@ export default function SchedulePanel({ cityId, initialStopId, onClose }: Schedu
   }, [selectedStop, cityId]);
 
   function toggleTrack(dep: Departure) {
+    if (!user) { onRequireLogin(); return; }
     const key = `${cityId}:${selectedStop}:${dep.tripId}:${dep.time}`;
     const next = tracked.includes(key) ? tracked.filter(item => item !== key) : [...tracked, key];
     setTracked(next);
-    localStorage.setItem('transit-atlas-tracked', JSON.stringify(next));
+    localStorage.setItem(`transit-atlas-tracked:${user.id}`, JSON.stringify(next));
+  }
+
+  function toggleFavorite(id: string, kind: 'route' | 'stop') {
+    if (!user) { onRequireLogin(); return; }
+    const favorites = kind === 'route' ? favoriteRoutes : favoriteStops;
+    const next = favorites.includes(id) ? favorites.filter(item => item !== id) : [...favorites, id];
+    if (kind === 'route') setFavoriteRoutes(next);
+    else setFavoriteStops(next);
+    localStorage.setItem(`transit-atlas-favorite-${kind === 'route' ? 'routes' : 'stops'}:${user.id}`, JSON.stringify(next));
   }
 
   async function enableNotifications() {
+    if (!user) { onRequireLogin(); return; }
     if (!('Notification' in window)) { setDepartureMessage('Ovaj preglednik ne podržava obavijesti.'); return; }
     const permission = await Notification.requestPermission();
     setDepartureMessage(permission === 'granted' ? 'Obavijesti su uključene dok je aplikacija otvorena.' : 'Dozvola za obavijesti nije odobrena.');
@@ -152,7 +174,7 @@ export default function SchedulePanel({ cityId, initialStopId, onClose }: Schedu
                 ? ` — ${stops.find(stop => stop.id === selectedStop)?.name}`
                 : ''}
             </h3>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-gray-500">{departureMessage}</span><button onClick={enableNotifications} className="text-sm text-primary underline">Uključi obavijesti</button></div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-gray-500">{departureMessage || (!user ? 'Prijavite se za praćenje polazaka i podsjetnike.' : '')}</span><button onClick={enableNotifications} className="text-sm text-primary underline">{user ? 'Uključi obavijesti' : 'Prijavi se za obavijesti'}</button></div>
             {departuresLoading ? (
               <div className="text-center text-gray-500 py-4">Učitavanje polazaka...</div>
             ) : departuresError ? (
@@ -172,7 +194,7 @@ export default function SchedulePanel({ cityId, initialStopId, onClose }: Schedu
                         <div className="text-sm text-gray-500">{dep.time}</div>
                       </div>
                     </div>
-                    <button onClick={() => toggleTrack(dep)} className={`text-xs px-3 py-2 rounded-lg ${tracked.includes(`${cityId}:${selectedStop}:${dep.tripId}:${dep.time}`) ? 'bg-green-100 text-green-800' : 'bg-blue-50 text-primary'}`}>{tracked.includes(`${cityId}:${selectedStop}:${dep.tripId}:${dep.time}`) ? 'Prati se' : 'Prati polazak'}</button>
+                    <button onClick={() => toggleTrack(dep)} className={`text-xs px-3 py-2 rounded-lg ${tracked.includes(`${cityId}:${selectedStop}:${dep.tripId}:${dep.time}`) ? 'bg-green-100 text-green-800' : 'bg-blue-50 text-primary'}`}>{tracked.includes(`${cityId}:${selectedStop}:${dep.tripId}:${dep.time}`) ? 'Prati se' : user ? 'Prati polazak' : 'Prijavi se za praćenje'}</button>
                   </div>
                 ))}
               </div>
@@ -182,22 +204,33 @@ export default function SchedulePanel({ cityId, initialStopId, onClose }: Schedu
 
         {activeTab === 'route' && (
           <div className="space-y-2">
+            {user && favoriteRoutes.length > 0 && (
+              <div className="mb-4 rounded-lg bg-amber-50 p-3">
+                <h3 className="mb-2 text-sm font-semibold text-amber-900">Omiljene linije</h3>
+                <div className="flex flex-wrap gap-2">
+                  {routes.filter(route => favoriteRoutes.includes(route.id)).map(route => (
+                    <button key={route.id} onClick={() => setSelectedRoute(route.id)} className="rounded-full bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm hover:bg-amber-100">
+                      {route.shortName} · {route.longName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {filteredRoutes.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 Nema rezultata pretrage
               </div>
             ) : (
               filteredRoutes.map(route => (
-                <button
-                  key={route.id}
-                  onClick={() => setSelectedRoute(route.id)}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
+                <div key={route.id} className={`flex items-center gap-2 rounded-lg border-2 p-2 transition-colors ${
                     selectedRoute === route.id
                       ? 'border-primary bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
+                  }`}>
+                  <button
+                    onClick={() => setSelectedRoute(route.id)}
+                    className="flex min-w-0 flex-1 items-center gap-3 p-2 text-left"
+                  >
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${
                       route.type === 'bus' ? 'bg-blue-600' : 'bg-red-600'
                     }`}>
@@ -209,8 +242,11 @@ export default function SchedulePanel({ cityId, initialStopId, onClose }: Schedu
                         {route.type === 'bus' ? 'Autobus' : 'Tramvaj'}
                       </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                  <button onClick={() => toggleFavorite(route.id, 'route')} aria-label={`${favoriteRoutes.includes(route.id) ? 'Ukloni iz' : 'Dodaj u'} omiljene linije`} title={user ? 'Omiljena linija' : 'Prijavite se za spremanje omiljenih linija'} className="rounded-lg px-3 py-2 text-xl text-amber-500 hover:bg-amber-50">
+                    {favoriteRoutes.includes(route.id) ? '★' : '☆'}
+                  </button>
+                </div>
               ))
             )}
           </div>
@@ -218,29 +254,38 @@ export default function SchedulePanel({ cityId, initialStopId, onClose }: Schedu
 
         {activeTab === 'stop' && (
           <div className="space-y-2">
+            {user && favoriteStops.length > 0 && (
+              <div className="mb-4 rounded-lg bg-amber-50 p-3">
+                <h3 className="mb-2 text-sm font-semibold text-amber-900">Omiljene stanice</h3>
+                <div className="flex flex-wrap gap-2">
+                  {stops.filter(stop => favoriteStops.includes(stop.id)).map(stop => (
+                    <button key={stop.id} onClick={() => setSelectedStop(stop.id)} className="rounded-full bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm hover:bg-amber-100">
+                      {stop.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {filteredStops.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 Nema rezultata pretrage
               </div>
             ) : (
               filteredStops.slice(0, 100).map(stop => (
-                <button
-                  key={stop.id}
-                  onClick={() => setSelectedStop(stop.id)}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
+                <div key={stop.id} className={`flex items-center gap-2 rounded-lg border-2 p-2 transition-colors ${
                     selectedStop === stop.id
                       ? 'border-primary bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="font-medium">{stop.name}</div>
-                  {stop.code && (
-                    <div className="text-sm text-gray-500">Kod: {stop.code}</div>
-                  )}
-                  {stop.wheelchairAccessible && (
-                    <div className="text-xs text-green-600 mt-1">♿ Pristupačno</div>
-                  )}
-                </button>
+                  }`}>
+                  <button onClick={() => setSelectedStop(stop.id)} className="min-w-0 flex-1 p-2 text-left">
+                    <div className="font-medium">{stop.name}</div>
+                    {stop.code && <div className="text-sm text-gray-500">Kod: {stop.code}</div>}
+                    {stop.wheelchairAccessible && <div className="mt-1 text-xs text-green-600">♿ Pristupačno</div>}
+                  </button>
+                  <button onClick={() => toggleFavorite(stop.id, 'stop')} aria-label={`${favoriteStops.includes(stop.id) ? 'Ukloni iz' : 'Dodaj u'} omiljene stanice`} title={user ? 'Omiljena stanica' : 'Prijavite se za spremanje omiljenih stanica'} className="rounded-lg px-3 py-2 text-xl text-amber-500 hover:bg-amber-50">
+                    {favoriteStops.includes(stop.id) ? '★' : '☆'}
+                  </button>
+                </div>
               ))
             )}
           </div>
