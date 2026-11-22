@@ -5,7 +5,7 @@ declare global {
   interface Window {
     google?: {
       accounts: { id: {
-        initialize: (options: { client_id: string; nonce: string; callback: (response: { credential: string }) => void }) => void;
+        initialize: (options: { client_id: string; nonce: string; callback: (response: { credential: string }) => void; error_callback?: (error: { type: string }) => void }) => void;
         renderButton: (element: HTMLElement, options: Record<string, string>) => void;
       } };
     };
@@ -37,7 +37,9 @@ export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSu
   const [status, setStatus] = useState('');
   const [parentToken, setParentToken] = useState('');
   const onSuccessRef = useRef(onSuccess);
+  const consentRef = useRef(consent);
   onSuccessRef.current = onSuccess;
+  consentRef.current = consent;
 
   useEffect(() => {
     let active = true;
@@ -49,7 +51,7 @@ export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSu
       await loadGoogleScript();
       const refreshChallenge = async () => {
         setError('');
-        const challenge = await createOAuthChallenge('google', intent, consent);
+        const challenge = await createOAuthChallenge('google', intent);
         if (!active || !window.google || !googleButton.current) return;
         window.google.accounts.id.initialize({
           client_id: providers.googleClientId!,
@@ -59,7 +61,7 @@ export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSu
               setError('');
               setStatus('');
               setParentToken('');
-              const result = await finishOAuth('google', response.credential);
+              const result = await finishOAuth('google', response.credential, intent, consentRef.current);
               if (!result.user) {
                 setStatus(result.message || 'Provjerite email roditelja ili skrbnika za nastavak registracije.');
                 if (result.parentConsentToken) setParentToken(result.parentConsentToken);
@@ -74,6 +76,12 @@ export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSu
               setError(cause instanceof Error ? cause.message : 'Google prijava nije uspjela.');
               void refreshChallenge().catch(() => {});
             }
+          },
+          error_callback: error => {
+            setError(error.type === 'popup_failed_to_open'
+              ? 'Dopusti skočni prozor za Google prijavu pa pokušaj ponovno.'
+              : 'Google prijava je prekinuta. Pokušaj ponovno.');
+            void refreshChallenge().catch(() => {});
           }
         });
         googleButton.current.replaceChildren();
@@ -83,7 +91,7 @@ export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSu
       refreshInterval = window.setInterval(() => void refreshChallenge().catch(() => {}), 4 * 60 * 1000);
     }).catch(cause => active && setError(cause instanceof Error ? cause.message : 'Google prijava trenutačno nije dostupna.'));
     return () => { active = false; if (refreshInterval) window.clearInterval(refreshInterval); };
-  }, [intent, consent?.termsAccepted, consent?.ageRange, consent?.guardianEmail]);
+  }, [intent]);
 
   return (
     <div className="mt-5 space-y-3">

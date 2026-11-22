@@ -100,16 +100,12 @@ router.get('/providers', (req, res) => {
 
 router.post('/oauth/challenge', requireSession,
   body('provider').isString().bail().equals('google'),
-  guardianEmailInput((value, { req }) => req.body?.intent === 'register' && req.body.ageRange === '10-15'),
+  body('intent').optional().isIn(['login', 'register']),
   asyncRoute(async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Provjerite podatke za Google prijavu.' });
-    const { provider, ageRange, termsAccepted } = req.body;
+    const { provider } = req.body;
     const intent = req.body.intent === 'register' ? 'register' : 'login';
-    const guardianEmail = intent === 'register' && ageRange === '10-15' ? req.body.guardianEmail : '';
-    if (intent === 'register' && (termsAccepted !== true || !['10-15', '16+'].includes(ageRange))) {
-      return res.status(400).json({ error: 'Prihvatite uvjete i odaberite dobnu skupinu.' });
-    }
     const settings = getRuntimeSettings();
     if (intent === 'register' && !settings.registrationEnabled) return res.status(403).json({ error: 'Registracija trenutačno nije dostupna.' });
     if (intent === 'login' && !settings.loginEnabled) return res.status(403).json({ error: 'Prijava trenutačno nije dostupna.' });
@@ -117,7 +113,13 @@ router.post('/oauth/challenge', requireSession,
       return res.status(503).json({ error: 'Ova prijava trenutačno nije postavljena.' });
     }
     const challenge = { nonce: randomBytes(32).toString('base64url'), state: randomBytes(24).toString('base64url'), expires: Date.now() + 5 * 60 * 1000 };
-    req.session.oauthChallenges = { ...req.session.oauthChallenges, [provider]: { ...challenge, intent, ageRange, guardianEmail, termsAccepted: termsAccepted === true } };
+    const existing = req.session.oauthChallenges?.[provider];
+    const previousChallenges = Array.isArray(existing) ? existing : existing ? [existing] : [];
+    req.session.oauthChallenges = {
+      ...req.session.oauthChallenges,
+      [provider]: [...previousChallenges.filter(item => item.expires > Date.now()), { ...challenge, intent }].slice(-5)
+    };
+    await new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
     res.json(challenge);
   })
 );
@@ -125,20 +127,17 @@ router.post('/oauth/challenge', requireSession,
 router.post('/oauth/:provider',
   requireSession,
   body('idToken').isString().bail().isJWT(),
+  body('intent').isString().bail().isIn(['login', 'register']),
+  body('ageRange').optional().isIn(['10-15', '16+']),
+  body('termsAccepted').optional().isBoolean(),
+  guardianEmailInput((value, { req }) => req.body?.intent === 'register' && req.body.ageRange === '10-15'),
   async (req, res) => {
     const provider = req.params.provider;
     if (provider !== 'google') return res.status(404).json({ error: 'Nepoznata prijava.' });
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Prijava nije uspjela. Pokušajte ponovno.' });
 
-    const challenge = req.session.oauthChallenges?.[provider];
-    delete req.session.oauthChallenges?.[provider];
     try {
-      await new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
-      if (!challenge || challenge.expires < Date.now()) {
-        return res.status(401).json({ error: 'Prijava je istekla. Pokušajte ponovno.' });
-      }
-
       if (!getRuntimeSettings().googleEnabled) return res.status(403).json({ error: 'Ova prijava trenutačno nije dostupna.' });
       const clientId = process.env.GOOGLE_CLIENT_ID;
       if (!clientId) return res.status(503).json({ error: 'Ova prijava trenutačno nije postavljena.' });
@@ -149,13 +148,30 @@ router.post('/oauth/:provider',
         requiredClaims: ['exp', 'sub', 'iat']
       });
       const claims = verified.payload;
-      if (claims.nonce !== challenge.nonce || typeof claims.sub !== 'string' || !claims.sub || typeof claims.email !== 'string' ||
+      if (typeof claims.sub !== 'string' || !claims.sub || typeof claims.email !== 'string' ||
           (claims.email_verified !== true && claims.email_verified !== 'true')) {
         return res.status(401).json({ error: 'Račun nije moguće potvrditi kod pružatelja prijave.' });
       }
 
+      const existing = req.session.oauthChallenges?.[provider];
+      const challenges = Array.isArray(existing) ? existing : existing ? [existing] : [];
+      const challenge = challenges.find(item => item.nonce === claims.nonce && item.expires >= Date.now());
+      if (!challenge || challenge.intent !== req.body.intent) {
+        return res.status(401).json({ error: 'Prijava je istekla. Pokušajte ponovno.' });
+      }
+      req.session.oauthChallenges[provider] = challenges.filter(item => item.nonce !== challenge.nonce);
+      await new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
+
+      const intent = req.body.intent;
+      const ageRange = intent === 'register' ? req.body.ageRange : '';
+      const guardianEmail = intent === 'register' && ageRange === '10-15' ? req.body.guardianEmail : '';
+      const termsAccepted = intent === 'register' && req.body.termsAccepted === true;
+      if (intent === 'register' && (!termsAccepted || !['10-15', '16+'].includes(ageRange))) {
+        return res.status(400).json({ error: 'Prihvatite uvjete i odaberite dobnu skupinu.' });
+      }
+
       const email = claims.email.toLowerCase();
-      if (challenge.ageRange === '10-15' && challenge.guardianEmail === email) return res.status(400).json({ error: 'Za roditeljsku potvrdu unesite email koji se razlikuje od Google emaila.' });
+      if (ageRange === '10-15' && guardianEmail === email) return res.status(400).json({ error: 'Za roditeljsku potvrdu unesite email koji se razlikuje od Google emaila.' });
       let user = await User.findOne({ googleSubject: claims.sub });
       const settings = getRuntimeSettings();
       if (user) {
@@ -163,7 +179,7 @@ router.post('/oauth/:provider',
           return res.status(403).json({ error: 'Prijava trenutačno nije dostupna.' });
         }
       } else {
-        if (challenge.intent !== 'register' || !settings.registrationEnabled) {
+        if (intent !== 'register' || !settings.registrationEnabled) {
           return res.status(404).json({ error: 'Google račun još nije registriran. Otvorite registraciju i prihvatite uvjete.' });
         }
         if (await User.exists({ email })) {
@@ -172,17 +188,17 @@ router.post('/oauth/:provider',
         if (!email.endsWith('@gmail.com') && !(typeof claims.hd === 'string' && claims.hd)) {
           return res.status(403).json({ error: 'Za ovu adresu registrirajte se emailom i potvrdite poveznicu iz sandučića.' });
         }
-        if (challenge.ageRange === '10-15') {
-          const result = await requestParentConsent({ email, guardianEmail: challenge.guardianEmail, googleSubject: claims.sub });
+        if (ageRange === '10-15') {
+          const result = await requestParentConsent({ email, guardianEmail, googleSubject: claims.sub });
           return res.json(result);
         }
-        if (challenge.ageRange !== '16+' || !challenge.termsAccepted) return res.status(400).json({ error: 'Registracija nije dovršena. Prihvatite uvjete i odaberite dobnu skupinu.' });
+        if (ageRange !== '16+' || !termsAccepted) return res.status(400).json({ error: 'Registracija nije dovršena. Prihvatite uvjete i odaberite dobnu skupinu.' });
         user = await User.create({
           email,
           emailVerified: true,
           googleSubject: claims.sub,
           passwordHash: await hashPassword(randomBytes(48).toString('hex')),
-          ageRange: challenge.ageRange,
+          ageRange,
           termsVersion: TERMS_VERSION,
           termsAcceptedAt: new Date()
         });
@@ -331,14 +347,16 @@ router.post('/login',
 
         req.session.userId = user._id.toString();
         req.session.sessionVersion = user.sessionVersion || 0;
-
-        res.json({
-          message: 'Uspješna prijava',
-          user: {
-            id: user._id,
-            email: user.email,
-            emailVerified: user.emailVerified
-          }
+        req.session.save(saveError => {
+          if (saveError) return res.status(500).json({ error: 'Greška pri prijavi' });
+          res.json({
+            message: 'Uspješna prijava',
+            user: {
+              id: user._id,
+              email: user.email,
+              emailVerified: user.emailVerified
+            }
+          });
         });
       });
     } catch (error) {

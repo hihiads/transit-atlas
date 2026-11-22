@@ -22,18 +22,18 @@ export interface RegistrationConsent {
   guardianEmail: string;
 }
 
-export async function createOAuthChallenge(provider: 'google', intent: 'login' | 'register' = 'login', consent?: RegistrationConsent): Promise<OAuthChallenge> {
+export async function createOAuthChallenge(provider: 'google', intent: 'login' | 'register' = 'login'): Promise<OAuthChallenge> {
   const response = await fetch(`${API_BASE}/api/auth/oauth/challenge`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-    body: JSON.stringify({ provider, intent, ...consent })
+    body: JSON.stringify({ provider, intent })
   });
   return handleResponse<OAuthChallenge>(response);
 }
 
-export async function finishOAuth(provider: 'google', idToken: string): Promise<AuthResponse> {
+export async function finishOAuth(provider: 'google', idToken: string, intent: 'login' | 'register', consent?: RegistrationConsent): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE}/api/auth/oauth/${provider}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-    body: JSON.stringify({ idToken })
+    body: JSON.stringify({ idToken, intent, ...(intent === 'register' ? consent : {}) })
   });
   return handleResponse<AuthResponse>(response);
 }
