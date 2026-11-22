@@ -61,7 +61,8 @@ html[data-theme='dark'] .text-gray-500, html[data-theme='dark'] .text-slate-700,
 html[data-theme='dark'] .text-slate-600, html[data-theme='dark'] .text-slate-500 { color:#b6c4d2 !important; }
 html[data-theme='dark'] .border-slate-200, html[data-theme='dark'] .border-slate-300,
 html[data-theme='dark'] .border-gray-200 { border-color:#344252 !important; }
-html[data-theme='dark'] input, html[data-theme='dark'] select, html[data-theme='dark'] textarea { color:#edf4fb; }
+html[data-theme='dark'] input:not([type='checkbox']):not([type='radio']), html[data-theme='dark'] select, html[data-theme='dark'] textarea { background-color:#101a24 !important; color:#edf4fb !important; border-color:#465667 !important; color-scheme:dark; }
+html[data-theme='dark'] input::placeholder, html[data-theme='dark'] textarea::placeholder { color:#9aabba !important; opacity:1; }
 html[data-theme='dark'] .leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(.88) contrast(.9); }
 html[data-theme='dark'] .leaflet-control-attribution { background:rgba(20,30,42,.88) !important; color:#cbd5e1 !important; }
 html[data-theme='dark'] .leaflet-control-attribution a { color:#7dd3fc !important; }

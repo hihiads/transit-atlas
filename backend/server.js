@@ -41,6 +41,7 @@ if (isProduction) {
 
 // Sigurnosni headeri
 app.use(helmet({
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
