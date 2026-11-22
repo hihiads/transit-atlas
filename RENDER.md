@@ -30,7 +30,7 @@ Projekt koristi jedan Node web service: Vite izgradi frontend, a Express posluž
 4. U MongoDB Atlas Network Access dopustite mrežni pristup Render servisu. Za Atlas URI koristite URL-encoded znakove u korisničkom imenu/lozinci.
 5. Nakon deploya otvorite `/` i `/api/system/status`. Admin je na `/admin`.
 
-Build naredba je `npm ci && npm run build`; start naredba je `npm start`. Express sluša na `PORT` koji dodjeljuje Render.
+Build naredba je `npm ci --include=dev && npm run build`, a start naredba je `npm start`. Build treba TypeScript i Vite čak i kad je `NODE_ENV=production`. Blueprint objavljuje commitove s grane `main` i koristi Node.js 22 prema rasponu u `package.json`. Ako je servis ručno konfiguriran, provjerite iste postavke u Render dashboardu. Express sluša na `PORT` koji dodjeljuje Render.
 
 ## Produkcijske postavke
 
