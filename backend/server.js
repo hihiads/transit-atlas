@@ -294,7 +294,7 @@ const gtfsFiles = {
 };
 const archiveLimit = 64 * 1024 * 1024;
 
-async function readStaticFeed(response) {
+async function readStaticFeed(response, publishMetadata) {
   if (!response.ok) {
     response.body?.destroy();
     throw new Error(`HTTP ${response.status}`);
@@ -304,22 +304,24 @@ async function readStaticFeed(response) {
     await extractFeed(response, directory, Object.keys(gtfsFiles));
     const data = {};
     for (const [file, key] of Object.entries(gtfsFiles)) {
-      if (key === 'stopTimes') continue;
+      if (key === 'stopTimes' || key === 'shapes') continue;
       const path = join(directory, file);
       data[key] = existsSync(path) ? parseGtfsCsv(readFileSync(path, 'utf8')) : [];
     }
-    const indexed = await indexGtfsStopTimes(join(directory, 'stop_times.txt'), data.trips, data.stops);
-    if (!data.routes.length || !data.stops.length || !data.trips.length || !indexed.count) {
+    if (!data.routes.length || !data.stops.length || !data.trips.length) {
       throw new Error('GTFS feed is missing required transit records');
     }
-    data.stopTimesByStop = indexed.byStop;
-    data.stopTimesByTrip = indexed.byTrip;
-    data.stopTimeCount = indexed.count;
     data.tripsById = new Map(data.trips.map(trip => [String(trip.trip_id), trip]));
     data.routesById = new Map(data.routes.map(route => [String(route.route_id), route]));
     data.stopsById = new Map(data.stops.map(stop => [String(stop.stop_id), stop]));
-    data.shapeResponse = buildShapeResponse(data);
-    delete data.shapes;
+    publishMetadata?.(data);
+
+    const indexed = await indexGtfsStopTimes(join(directory, 'stop_times.txt'), data.trips, data.stops);
+    if (!indexed.count) throw new Error('GTFS feed has no indexed departures');
+    data.stopTimesByStop = indexed.byStop;
+    data.stopTimesByTrip = indexed.byTrip;
+    data.stopTimeCount = indexed.count;
+    data.shapeResponse = await buildShapeResponse(data, join(directory, 'shapes.txt'));
     return data;
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -346,7 +348,13 @@ async function loadGtfsData() {
       }
     }
 
-    gtfsData = await readStaticFeed(response);
+    gtfsData = await readStaticFeed(response, metadata => {
+      if (!gtfsLoaded) {
+        gtfsData = { ...gtfsData, ...metadata };
+        realtimeCache = null;
+      }
+    });
+    realtimeCache = null;
     lastGtfsUpdate = new Date();
     gtfsLoaded = true;
     gtfsLoadError = null;
@@ -450,8 +458,7 @@ async function fetchRealtimeVehiclesFromZet() {
     const cancelledTrips = new Set();
     let staleCount = 0;
     const feedTimestamp = feed.header?.timestamp ? Number(feed.header.timestamp) * 1000 : Date.now();
-    const routesById = new Map(gtfsData.routes.map(item => [String(item.route_id).trim(), item]));
-    const tripsById = new Map(gtfsData.trips.map(item => [String(item.trip_id).trim(), item]));
+    const { routesById, tripsById } = gtfsData;
 
     for (const entity of feed.entity) {
       const tripUpdate = entity.tripUpdate;
@@ -491,8 +498,9 @@ async function fetchRealtimeVehiclesFromZet() {
           }
         }
 
-        const route = routesById.get(String(vehicle.trip?.routeId || '').trim());
-        const trip = tripsById.get(String(vehicle.trip?.tripId || '').trim());
+        const trip = tripsById?.get(String(vehicle.trip?.tripId || '').trim());
+        const route = routesById?.get(String(vehicle.trip?.routeId || '').trim()) ??
+          routesById?.get(String(trip?.route_id || '').trim());
         const routeType = Number(route?.route_type);
 
         const lastUpdate = vehicle.timestamp ? Number(vehicle.timestamp) * 1000 : feedTimestamp;
@@ -613,26 +621,35 @@ app.get('/api/shapes/:cityId', heavyLimiter, (req, res) => {
   res.json(data.shapeResponse);
 });
 
-function buildShapeResponse(data) {
+async function buildShapeResponse(data, filePath) {
   const routeByShape = new Map();
   for (const trip of data.trips) {
     if (trip.shape_id && !routeByShape.has(String(trip.shape_id))) routeByShape.set(String(trip.shape_id), String(trip.route_id));
   }
   const grouped = new Map();
-  for (const point of data.shapes || []) {
-    if (!point.shape_id || !Number.isFinite(Number(point.shape_pt_lat)) || !Number.isFinite(Number(point.shape_pt_lon))) continue;
-    const id = String(point.shape_id);
-    if (!grouped.has(id)) grouped.set(id, []);
-    grouped.get(id).push(point);
+  if (existsSync(filePath)) {
+    const parser = parseStream({ columns: true, skip_empty_lines: true, trim: true, relax_quotes: true });
+    const input = createReadStream(filePath);
+    input.on('error', error => parser.destroy(error));
+    input.pipe(parser);
+    for await (const point of parser) {
+      const lat = Number(point.shape_pt_lat);
+      const lon = Number(point.shape_pt_lon);
+      if (!point.shape_id || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      let coordinates = grouped.get(point.shape_id);
+      if (!coordinates) grouped.set(point.shape_id, coordinates = []);
+      coordinates.push([lat, lon, Number(point.shape_pt_sequence)]);
+    }
   }
   const shapes = [...grouped].map(([id, points]) => {
-    points.sort((a, b) => Number(a.shape_pt_sequence) - Number(b.shape_pt_sequence));
+    points.sort((a, b) => a[2] - b[2]);
+    for (const point of points) point.pop();
     const routeId = routeByShape.get(id) || '';
     return {
       id,
       routeId,
       color: data.routesById.get(routeId)?.route_color || null,
-      coordinates: points.map(point => [Number(point.shape_pt_lat), Number(point.shape_pt_lon)])
+      coordinates: points
     };
   });
   return { shapes, status: 'loaded', count: shapes.length };
