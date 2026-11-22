@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import AuthModal from '../../src/components/Auth/AuthModal';
 import { api, AuthStatus } from '../../src/api';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -19,18 +19,28 @@ function Icon({ name, size = 16 }: { name: 'swap' | 'clock' | 'locate' | 'login'
 
 type ApiStation = { id: number; name: string };
 type GeoStation = { stop_id: string; stop_name: string; stop_lat: number; stop_lon: number };
-type Station = ApiStation & { lat: number; lon: number };
+type Station = ApiStation & { lat?: number; lon?: number };
 type DelayInfo = { Delay?: number | null; Station?: string | null } | null;
+type TrainLeg = { Number?: string; Delay?: DelayInfo; Start?: { Name?: string }; Dest?: { Name?: string } };
 type Journey = {
   DepartureDateTime: string;
   ArrivalDateTime: string;
-  TransportationsWithDelay?: { TransportationWithDelay?: Array<{ Number?: string; Delay?: DelayInfo }> };
+  TransportationsWithDelay?: { TransportationWithDelay?: TrainLeg[] };
 };
 
 const HZPP = '/hzpp-api';
 const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
-const DEFAULT_FROM = 'Trnava';
-const DEFAULT_TO = 'Zagreb Glavni kol.';
+
+type JourneySearch = { from: Station; to: Station; date: string; time: string };
+
+function zagrebDate() {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Zagreb', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
+function displayDate(date: string) {
+  const parsed = new Date(`${date}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? date : new Intl.DateTimeFormat('hr-HR', { dateStyle: 'long' }).format(parsed);
+}
 
 function normalize(value: string) {
   return value.toLocaleLowerCase('hr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\bkol\.?(?=\s|$)/g, 'kolodvor').replace(/\s+/g, ' ').trim();
@@ -49,8 +59,11 @@ function minutesUntil(value: string) {
 export default function TransitlyHzpp() {
   const { user, logout } = useAuth();
   const [stations, setStations] = useState<Station[]>([]);
-  const [from, setFrom] = useState<Station | null>(null);
-  const [to, setTo] = useState<Station | null>(null);
+  const [fromName, setFromName] = useState('');
+  const [toName, setToName] = useState('');
+  const [travelDate, setTravelDate] = useState(zagrebDate);
+  const [travelTime, setTravelTime] = useState('00:00');
+  const [search, setSearch] = useState<JourneySearch | null>(null);
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [loadingStations, setLoadingStations] = useState(true);
   const [loadingJourneys, setLoadingJourneys] = useState(false);
@@ -60,31 +73,39 @@ export default function TransitlyHzpp() {
   const [now, setNow] = useState(Date.now());
   const [showAuth, setShowAuth] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ loginEnabled: true, registrationEnabled: true, authenticationActive: true });
+  const requestId = useRef(0);
 
   useEffect(() => { api.getAuthStatus().then(setAuthStatus).catch(() => {}); }, []);
 
-  const loadJourneys = useCallback(async (origin: Station, destination: Station, quiet = false) => {
+  const from = stations.find(station => normalize(station.name) === normalize(fromName)) ?? null;
+  const to = stations.find(station => normalize(station.name) === normalize(toName)) ?? null;
+
+  const loadJourneys = useCallback(async (query: JourneySearch, quiet = false) => {
+    const currentRequest = ++requestId.current;
     if (!quiet) setLoadingJourneys(true);
     try {
-      const date = new Date();
-      const localDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Zagreb', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
-      const localTime = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Zagreb', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
       const params = new URLSearchParams({
-        lang: 'hr', deviceType: 'WEB', clientUICOperatorCode: '1178', from: String(origin.id), to: String(destination.id),
-        startTime: `${localDate}T${localTime}:00`, trainClass: '2', benefit: '1', countForBenefit: '1', transportChanges: 'DIRECT'
+        lang: 'hr', deviceType: 'WEB', clientUICOperatorCode: '1178', from: String(query.from.id), to: String(query.to.id),
+        startTime: `${query.date}T${query.time}:00`, trainClass: '2', benefit: '1', countForBenefit: '1', transportChanges: 'DIRECT'
       });
       const response = await fetch(`${HZPP}/journeys-with-details/busInfo?${params}`);
+      if (currentRequest !== requestId.current) return;
       if (!response.ok) throw new Error('HŽPP trenutačno ne vraća podatke. Pokušaj ponovno.');
       const data = await response.json();
+      if (currentRequest !== requestId.current) return;
       const found: Journey[] = data?.JourneysTypesResponsev2?.JourneyWithTickets?.JourneysWithTicketsType ?? [];
-      const upcoming = found.filter(item => new Date(item.DepartureDateTime).getTime() > Date.now())
+      const selectedDay = found.filter(item => item.DepartureDateTime?.slice(0, 10) === query.date);
+      const currentDayJourneys = query.date === zagrebDate()
+        ? selectedDay.filter(item => new Date(item.DepartureDateTime).getTime() > Date.now())
+        : selectedDay;
+      const upcoming = currentDayJourneys
         .sort((a, b) => new Date(a.DepartureDateTime).getTime() - new Date(b.DepartureDateTime).getTime());
       setJourneys(upcoming);
-      setMessage(upcoming.length ? '' : 'Nema više vlakova za odabranu relaciju danas.');
+      setMessage(upcoming.length ? '' : 'Za odabranu relaciju i datum nema dostupnih vlakova.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Ne mogu učitati polaske.');
+      if (currentRequest === requestId.current) setMessage(error instanceof Error ? error.message : 'Ne mogu učitati polaske.');
     } finally {
-      if (!quiet) setLoadingJourneys(false);
+      if (!quiet && currentRequest === requestId.current) setLoadingJourneys(false);
     }
   }, []);
 
@@ -97,44 +118,49 @@ export default function TransitlyHzpp() {
       if (!active) return;
       const geoByName = new Map<string, GeoStation>();
       for (const point of geoData) if (!geoByName.has(normalize(point.stop_name))) geoByName.set(normalize(point.stop_name), point);
-      const mapped: Station[] = (apiData.response as ApiStation[]).flatMap(station => {
+      const mapped: Station[] = (apiData.response as ApiStation[]).map(station => {
         const geo = geoByName.get(normalize(station.name));
-        return geo ? [{ ...station, lat: geo.stop_lat, lon: geo.stop_lon }] : [];
+        return { ...station, lat: geo?.stop_lat, lon: geo?.stop_lon };
       });
       setStations(mapped);
-      const origin = mapped.find(station => normalize(station.name) === normalize(DEFAULT_FROM)) ?? null;
-      const destination = mapped.find(station => normalize(station.name) === normalize(DEFAULT_TO)) ?? null;
-      setFrom(origin);
-      setTo(destination);
       setLoadingStations(false);
     }).catch(() => { if (active) { setLoadingStations(false); setMessage('Ne mogu učitati stanice. Provjeri vezu i osvježi stranicu.'); } });
     return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    if (!from || !to) return;
-    void loadJourneys(from, to);
-    const refresh = window.setInterval(() => void loadJourneys(from, to, true), 30000);
+    if (!search) return;
+    void loadJourneys(search);
+    if (search.date !== zagrebDate()) return;
+    const refresh = window.setInterval(() => void loadJourneys(search, true), 30000);
     const clock = window.setInterval(() => setNow(Date.now()), 15000);
     return () => { window.clearInterval(refresh); window.clearInterval(clock); };
-  }, [from, to, loadJourneys]);
+  }, [search, loadJourneys]);
+
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!from || !to) { setMessage('Odaberi polaznu i odredišnu stanicu s popisa.'); return; }
+    setJourneys([]);
+    setMessage('');
+    setSearch({ from, to, date: travelDate, time: travelTime });
+  }
 
   function useNearestStation() {
     if (!navigator.geolocation) { setMessage('Ovaj uređaj ne podržava lokaciju.'); return; }
     setLocationBusy(true);
     navigator.geolocation.getCurrentPosition(({ coords }) => {
-      const nearest = stations.reduce<Station | null>((best, station) => {
+      const nearest = stations.filter((station): station is Station & { lat: number; lon: number } => Number.isFinite(station.lat) && Number.isFinite(station.lon)).reduce<Station | null>((best, station) => {
         const distance = (station.lat - coords.latitude) ** 2 + (station.lon - coords.longitude) ** 2;
         if (!best) return station;
         return distance < (best.lat - coords.latitude) ** 2 + (best.lon - coords.longitude) ** 2 ? station : best;
       }, null);
-      if (nearest) { setFrom(nearest); setNearby(nearest); }
+      if (nearest) { setFromName(nearest.name); setNearby(nearest); }
       else setMessage('Nisam pronašao stanicu u blizini.');
       setLocationBusy(false);
     }, () => { setMessage('Lokacija nije dostupna. Dopusti pristup lokaciji pa pokušaj ponovno.'); setLocationBusy(false); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
 
-  function swapStations() { setFrom(to); setTo(from); }
+  function swapStations() { setFromName(toName); setToName(fromName); }
 
   return <main className="app-shell">
     <header className="topbar">
@@ -145,37 +171,50 @@ export default function TransitlyHzpp() {
 
     <div className="workspace">
       <aside className="side-panel">
-        <div className="panel-heading"><div><span className="eyebrow">PUTOVANJE VLAKOM</span><h1>Gdje ideš?</h1></div><div className="round-icon"><Icon name="train" size={19} /></div></div>
-        <div className="route-form">
-          <label className="station-field"><span className="field-dot origin" /><span className="field-copy"><span>Polazna stanica</span><select aria-label="Polazna stanica" value={from?.id ?? ''} disabled={loadingStations} onChange={event => { setFrom(stations.find(station => station.id === Number(event.target.value)) ?? null); setNearby(null); }}><option value="">{loadingStations ? 'Učitavanje stanica…' : 'Odaberi stanicu'}</option>{stations.map(station => <option key={station.id} value={station.id}>{station.name}</option>)}</select></span></label>
-          <button className="swap-button" onClick={swapStations} aria-label="Zamijeni stanice"><Icon name="swap" size={16} /></button>
-          <label className="station-field"><span className="field-dot destination" /><span className="field-copy"><span>Odredišna stanica</span><select aria-label="Odredišna stanica" value={to?.id ?? ''} disabled={loadingStations} onChange={event => setTo(stations.find(station => station.id === Number(event.target.value)) ?? null)}><option value="">Odaberi stanicu</option>{stations.map(station => <option key={station.id} value={station.id}>{station.name}</option>)}</select></span></label>
-        </div>
-        <button className="nearest-button" onClick={useNearestStation} disabled={locationBusy || loadingStations}><Icon name="locate" size={17} />{locationBusy ? 'Tražim stanicu…' : 'Pronađi najbližu stanicu'}</button>
+        <div className="panel-heading"><div><span className="eyebrow">PLANER PUTOVANJA VLAKOM</span><h1>Gdje i kada putuješ?</h1></div><div className="round-icon"><Icon name="train" size={19} /></div></div>
+        <form onSubmit={submitSearch}>
+          <div className="route-form">
+            <label className="station-field"><span className="field-dot origin" /><span className="field-copy"><span>Polazna stanica</span><input list="hzpp-stations" aria-label="Polazna stanica" placeholder={loadingStations ? 'Učitavanje stanica…' : 'Pretraži stanice'} value={fromName} disabled={loadingStations} onChange={event => { setFromName(event.target.value); setNearby(null); }} /></span></label>
+            <button className="swap-button" type="button" onClick={swapStations} aria-label="Zamijeni stanice"><Icon name="swap" size={16} /></button>
+            <label className="station-field"><span className="field-dot destination" /><span className="field-copy"><span>Odredišna stanica</span><input list="hzpp-stations" aria-label="Odredišna stanica" placeholder={loadingStations ? 'Učitavanje stanica…' : 'Pretraži stanice'} value={toName} disabled={loadingStations} onChange={event => setToName(event.target.value)} /></span></label>
+            <datalist id="hzpp-stations">{stations.map(station => <option key={station.id} value={station.name} />)}</datalist>
+          </div>
+          <div className="journey-filters">
+            <label><span>Datum putovanja</span><input type="date" value={travelDate} onChange={event => setTravelDate(event.target.value)} required /></label>
+            <label><span>Polazak nakon</span><input type="time" value={travelTime} onChange={event => setTravelTime(event.target.value)} required /></label>
+          </div>
+          <div className="search-actions">
+            <button className="nearest-button" type="button" onClick={useNearestStation} disabled={locationBusy || loadingStations}><Icon name="locate" size={17} />{locationBusy ? 'Tražim stanicu…' : 'Najbliža stanica'}</button>
+            <button className="search-button" type="submit" disabled={loadingStations || loadingJourneys}>{loadingJourneys ? 'Tražim vlakove…' : 'Pronađi vlakove'}</button>
+          </div>
+        </form>
         {nearby && <div className="nearest-note"><Icon name="pin" size={14} /> Najbliža stanica: <strong>{nearby.name}</strong></div>}
 
-        <div className="departures-head"><div><span className="eyebrow">DANAŠNJI POLASCI</span><h2>{from?.name ?? 'Odaberi polazište'}</h2></div><span className="count-pill">{journeys.length}</span></div>
-        <div className="route-summary"><span>{from?.name || 'Polazak'}</span><i /><span>{to?.name || 'Dolazak'}</span></div>
+        <div className="departures-head"><div><span className="eyebrow">POLASCI ZA ODABRANI DAN</span><h2>{search?.from.name ?? 'Odaberi relaciju'}</h2></div><span className="count-pill">{journeys.length}</span></div>
+        <div className="route-summary"><span>{search?.from.name || 'Polazak'}</span><i /><span>{search?.to.name || 'Dolazak'}</span><span>{search ? `${displayDate(search.date)} · nakon ${search.time}` : ''}</span></div>
         <div className="departure-list" aria-live="polite">
-          {loadingJourneys && !journeys.length && <div className="empty-state"><span className="loader" />Tražim dostupne vlakove…</div>}
-          {!loadingJourneys && !journeys.length && !message && <div className="empty-state">Odaberi polaznu i odredišnu stanicu.</div>}
+          {loadingJourneys && !journeys.length && <div className="empty-state"><span className="loader" />Tražim vlakove za odabranu relaciju i datum…</div>}
+          {!loadingJourneys && !journeys.length && !message && <div className="empty-state">Odaberi polaznu stanicu, odredište i datum pa potraži vlakove.</div>}
           {message && !journeys.length && <div className="empty-state error-state">{message}</div>}
           {journeys.map((journey, index) => {
-            const vehicle = journey.TransportationsWithDelay?.TransportationWithDelay?.[0];
-            const delay = vehicle?.Delay?.Delay;
-            const live = typeof delay === 'number' && delay > 0;
+            const legs = journey.TransportationsWithDelay?.TransportationWithDelay ?? [];
+            const delays = legs.map(leg => leg.Delay?.Delay).filter((delay): delay is number => typeof delay === 'number' && delay > 0);
+            const delay = delays.length ? Math.max(...delays) : 0;
+            const live = delay > 0;
+            const delayedLeg = legs.find(leg => leg.Delay?.Delay === delay);
             const wait = minutesUntil(journey.DepartureDateTime);
-            return <article className={`departure-card ${index === 0 ? 'next-card' : ''}`} key={`${vehicle?.Number}-${journey.DepartureDateTime}`}>
+            return <article className={`departure-card ${index === 0 ? 'next-card' : ''}`} key={`${legs.map(leg => leg.Number).join('-')}-${journey.DepartureDateTime}`}>
               <div className="departure-times"><strong>{time(journey.DepartureDateTime)}</strong><span className="duration-line" /><strong>{time(journey.ArrivalDateTime)}</strong></div>
-              <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} /> Vlak {vehicle?.Number || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? `Kasni ${delay} min` : 'Po rasporedu'}</span></div>
-              <div className="card-footer"><span><Icon name="clock" size={13} /> {wait === 0 ? 'Uskoro polazi' : `Za ${wait} min`}</span>{live && vehicle?.Delay?.Station && <span>Zadnja prijava: {vehicle.Delay.Station}</span>}</div>
+              <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} /> Vlak {legs.map(leg => leg.Number).filter(Boolean).join(' → ') || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? `Kasni ${delay} min` : 'Po rasporedu'}</span></div>
+              {legs.length > 1 && <div className="transfer-legs">{legs.map((leg, legIndex) => <span key={`${leg.Number}-${legIndex}`}>{leg.Start?.Name} → {leg.Dest?.Name}</span>)}</div>}
+              <div className="card-footer"><span><Icon name="clock" size={13} /> {wait === 0 ? 'Uskoro polazi' : `Za ${wait} min`}</span>{live && delayedLeg?.Delay?.Station && <span>Zadnja prijava: {delayedLeg.Delay.Station}</span>}</div>
             </article>;
           })}
         </div>
         <div className="panel-footnote">Polasci i kašnjenja preuzeti su iz HŽPP-ovih podataka. HŽPP ne šalje GPS lokaciju vlaka; stanica uz kašnjenje označava zadnju prijavu, ne položaj uživo. <a href="/terms">Uvjeti korištenja</a></div>
       </aside>
 
-      <section className="data-note" aria-live="polite"><span className="status-dot" /> Podaci se osvježavaju svakih 30 sekundi <span>·</span> {new Intl.DateTimeFormat('hr-HR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zagreb' }).format(now)}</section>
+      <section className="data-note" aria-live="polite"><span className="status-dot" />{search ? search.date === zagrebDate() ? <> Današnji polasci osvježavaju se svakih 30 sekundi <span>·</span> {new Intl.DateTimeFormat('hr-HR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zagreb' }).format(now)}</> : ' Raspored za odabrani datum' : ' Unesi relaciju i datum za prikaz polazaka'}</section>
     </div>
     {showAuth && <AuthModal onClose={() => setShowAuth(false)} loginEnabled={authStatus.loginEnabled} registrationEnabled={authStatus.registrationEnabled} />}
   </main>;
