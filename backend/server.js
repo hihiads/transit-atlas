@@ -13,7 +13,7 @@ import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import secondLookRoutes from './routes/secondlook.js';
-import { apiLimiter, asyncRoute, authLimiter, heavyLimiter } from './middleware/security.js';
+import { apiLimiter, asyncRoute, heavyLimiter } from './middleware/security.js';
 import { attachUser } from './middleware/auth.js';
 import { activateAuthentication, getAuthenticationSessionMiddleware } from './services/authRuntime.js';
 import { isAuthenticationEnabled, loadRuntimeSettings, missingAuthenticationEnvironment } from './config/runtimeSettings.js';
@@ -565,7 +565,7 @@ async function fetchRealtimeVehiclesFromZet() {
 // API Routes
 
 // Autentifikacija
-app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api', apiLimiter, secondLookRoutes);
 
 // Opći API rate limiter

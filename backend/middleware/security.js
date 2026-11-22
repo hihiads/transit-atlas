@@ -45,6 +45,23 @@ export const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+export const oauthChallengeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { error: 'Previše pokušaja prijave. Pokušajte ponovno kasnije.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+export const oauthCallbackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  skipSuccessfulRequests: true,
+  message: { error: 'Previše pokušaja Google prijave. Pokušajte ponovno kasnije.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // Rate limiter za skupe operacije (GTFS download, shapes)
 export const heavyLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuta

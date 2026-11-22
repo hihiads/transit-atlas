@@ -10,7 +10,7 @@ import { randomBytes } from 'crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getRuntimeSettings, isAuthenticationEnabled } from '../config/runtimeSettings.js';
 import { requireTrustedOrigin } from '../config/origins.js';
-import { asyncRoute, emailActionLimiter } from '../middleware/security.js';
+import { asyncRoute, authLimiter, emailActionLimiter, oauthCallbackLimiter, oauthChallengeLimiter } from '../middleware/security.js';
 import { deleteUserSessions } from '../services/authRuntime.js';
 
 const router = express.Router();
@@ -99,6 +99,7 @@ router.get('/providers', (req, res) => {
 });
 
 router.post('/oauth/challenge', requireSession,
+  oauthChallengeLimiter,
   body('provider').isString().bail().equals('google'),
   body('intent').optional().isIn(['login', 'register']),
   asyncRoute(async (req, res) => {
@@ -126,6 +127,7 @@ router.post('/oauth/challenge', requireSession,
 
 router.post('/oauth/:provider',
   requireSession,
+  oauthCallbackLimiter,
   body('idToken').isString().bail().isJWT(),
   body('intent').isString().bail().isIn(['login', 'register']),
   body('ageRange').optional().isIn(['10-15', '16+']),
@@ -308,6 +310,7 @@ router.post('/register',
 router.post('/login',
   requireLogin,
   requireSession,
+  authLimiter,
   emailInput(),
   body('password').isString().bail().isLength({ min: 1, max: 128 }),
   async (req, res) => {
