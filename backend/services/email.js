@@ -4,6 +4,7 @@ const transporter = () => nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT || 587),
   secure: Number(process.env.SMTP_PORT) === 465,
+  requireTLS: process.env.NODE_ENV === 'production',
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   disableFileAccess: true,
   disableUrlAccess: true
@@ -14,7 +15,11 @@ async function send(to, subject, link, action) {
     if (process.env.NODE_ENV !== 'production') return false;
     throw new Error('SMTP nije konfiguriran');
   }
-  const url = new URL(link, process.env.APP_BASE_URL).toString();
+  const destination = new URL(link, process.env.APP_BASE_URL);
+  if (process.env.NODE_ENV === 'production' && destination.protocol !== 'https:') {
+    throw new Error('Production email links require HTTPS');
+  }
+  const url = destination.toString();
   await transporter().sendMail({
     from: process.env.SMTP_FROM,
     to,
@@ -25,7 +30,7 @@ async function send(to, subject, link, action) {
   return true;
 }
 
-export const sendVerificationEmail = (to, token) => send(to, 'Potvrdite Transitly račun', `/verify-email?token=${encodeURIComponent(token)}`, 'Potvrdite email adresu');
-export const sendPasswordResetEmail = (to, token) => send(to, 'Promjena lozinke za Transitly', `/reset-password?token=${encodeURIComponent(token)}`, 'Promijenite lozinku');
+export const sendVerificationEmail = (to, token) => send(to, 'Potvrdite Transitly račun', `/verify-email#token=${encodeURIComponent(token)}`, 'Potvrdite email adresu');
+export const sendPasswordResetEmail = (to, token) => send(to, 'Promjena lozinke za Transitly', `/reset-password#token=${encodeURIComponent(token)}`, 'Promijenite lozinku');
 
-export const sendParentalConsentEmail = (to, token) => send(to, 'Potvrda roditelja/skrbnika za Transitly', `/confirm-parent?token=${encodeURIComponent(token)}`, 'Potvrdite da dopuštate djetetu korištenje Transitlyja');
+export const sendParentalConsentEmail = (to, token) => send(to, 'Potvrda roditelja/skrbnika za Transitly', `/confirm-parent#token=${encodeURIComponent(token)}`, 'Potvrdite da dopuštate djetetu korištenje Transitlyja');

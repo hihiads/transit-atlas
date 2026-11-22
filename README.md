@@ -139,11 +139,10 @@ Vaš hosting provider može koristiti **jednu .env** koja sadrži i backend i fr
 # MongoDB
 MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/transit-atlas?retryWrites=true&w=majority
 
-# Security (SESSION_SECRET/PASSWORD_PEPPER su opcionalni; sustav ima lokalne sigurnosne zadane vrijednosti)
-SESSION_SECRET=<opcionalna-nasumična-tajna>
-PASSWORD_PEPPER=<opcionalna-stalna-nasumična-tajna>
+# Zasebne tajne obvezne za autentifikaciju u produkciji
+SESSION_SECRET=<nasumična-tajna-od-najmanje-32-znaka>
+PASSWORD_PEPPER=<stalna-nasumična-tajna-od-najmanje-32-znaka>
 ADMIN_PANEL_PASSWORD=<nasumična administratorska lozinka od najmanje 16 znakova>
-ADMIN_PANEL_SECRET=<opcionalna-odvojena-tajna>
 AUTH_LOGIN_ENABLED=true
 AUTH_REGISTRATION_ENABLED=true
 AUTH_GOOGLE_ENABLED=true

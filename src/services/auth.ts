@@ -132,12 +132,12 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   }
 }
 
-export async function verifyEmail(token: string): Promise<AuthResponse> {
+export async function verifyEmail(token: string, password: string): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE}/api/auth/verify-email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ token })
+    body: JSON.stringify({ token, password })
   });
   return handleResponse<AuthResponse>(response);
 }

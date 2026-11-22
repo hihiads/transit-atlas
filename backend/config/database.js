@@ -12,12 +12,12 @@ export async function connectDatabase() {
     });
     console.log('[MongoDB] ✓ Povezano s bazom');
   } catch (error) {
-    console.error('[MongoDB] ✗ Greška pri povezivanju:', error.message);
-    throw error;
+    console.error('[MongoDB] ✗ Greška pri povezivanju:', error.name);
+    throw new Error('MongoDB connection failed');
   }
 
   mongoose.connection.on('error', (err) => {
-    console.error('[MongoDB] Greška:', err);
+    console.error('[MongoDB] Greška:', err.name);
   });
 
   mongoose.connection.on('disconnected', () => {

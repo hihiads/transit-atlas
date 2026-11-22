@@ -2,16 +2,17 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import fetch from 'node-fetch';
 import GtfsRealtimeBindings from 'gtfs-realtime-bindings';
-import AdmZip from 'adm-zip';
-import { createReadStream, existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { createReadStream, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { fetchFeed, extractFeed } from './services/gtfsArchive.js';
 import { parse } from 'csv-parse/sync';
 import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
-import { apiLimiter, authLimiter, heavyLimiter } from './middleware/security.js';
+import { apiLimiter, asyncRoute, authLimiter, heavyLimiter } from './middleware/security.js';
 import { attachUser } from './middleware/auth.js';
 import { activateAuthentication, getAuthenticationSessionMiddleware } from './services/authRuntime.js';
 import { isAuthenticationEnabled, loadRuntimeSettings, missingAuthenticationEnvironment } from './config/runtimeSettings.js';
@@ -42,11 +43,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", 'challenges.cloudflare.com', 'accounts.google.com', 'appleid.cdn-apple.com'],
+      scriptSrc: ["'self'", "'sha256-kD560ROsIeuV8jk1zX9ENjBodXU+OWC1CUzXI2u2Cqo='", 'challenges.cloudflare.com', 'accounts.google.com'],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
-      connectSrc: ["'self'", 'accounts.google.com', 'appleid.cdn-apple.com'],
-      frameSrc: ["'self'", 'challenges.cloudflare.com', 'accounts.google.com', 'appleid.cdn-apple.com'],
+      connectSrc: ["'self'", 'accounts.google.com'],
+      frameSrc: ["'self'", 'challenges.cloudflare.com', 'accounts.google.com'],
       fontSrc: ["'self'", 'data:'],
     },
   },
@@ -268,78 +269,70 @@ function activeServicesOn(day) {
 }
 
 // Preuzmi i parsiraj GTFS Static podatke
+const gtfsFiles = {
+  'routes.txt': 'routes',
+  'stops.txt': 'stops',
+  'trips.txt': 'trips',
+  'stop_times.txt': 'stopTimes',
+  'calendar.txt': 'calendar',
+  'calendar_dates.txt': 'calendarDates',
+  'shapes.txt': 'shapes',
+  'agency.txt': 'agency'
+};
+const archiveLimit = 64 * 1024 * 1024;
+
+async function readStaticFeed(response) {
+  if (!response.ok) {
+    response.body?.destroy();
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const directory = await mkdtemp(join(tmpdir(), 'transitly-gtfs-'));
+  try {
+    await extractFeed(response, directory, Object.keys(gtfsFiles));
+    const data = {};
+    for (const [file, key] of Object.entries(gtfsFiles)) {
+      if (key === 'stopTimes') continue;
+      const path = join(directory, file);
+      data[key] = existsSync(path) ? parseGtfsCsv(readFileSync(path, 'utf8')) : [];
+    }
+    const indexed = await indexGtfsStopTimes(join(directory, 'stop_times.txt'), data.trips);
+    if (!data.routes.length || !data.stops.length || !data.trips.length || !indexed.count) {
+      throw new Error('GTFS feed is missing required transit records');
+    }
+    data.stopTimesByStop = indexed.byStop;
+    data.stopTimeCount = indexed.count;
+    data.tripsById = new Map(data.trips.map(trip => [String(trip.trip_id), trip]));
+    data.routesById = new Map(data.routes.map(route => [String(route.route_id), route]));
+    data.stopsById = new Map(data.stops.map(stop => [String(stop.stop_id), stop]));
+    data.shapeResponse = buildShapeResponse(data);
+    delete data.shapes;
+    return data;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
 async function loadGtfsData() {
   if (gtfsLoadInProgress) return;
   gtfsLoadInProgress = true;
-  const gtfsUrl = 'https://www.zet.hr/gtfs-scheduled/latest';
-  const dataDir = join(process.cwd(), 'gtfs_data');
+  const allowedOrigin = 'https://www.zet.hr';
+  const options = { allowedOrigin, maxBytes: archiveLimit, headers: zetStaticHeaders };
 
   try {
-    console.log(`[GTFS Static] Preuzimanje sa ${gtfsUrl}...`);
-
-    if (!existsSync(dataDir)) {
-      mkdirSync(dataDir, { recursive: true });
-    }
-
-    let response = await fetch(gtfsUrl, { headers: zetStaticHeaders, signal: AbortSignal.timeout(30000) });
+    let response = await fetchFeed(`${allowedOrigin}/gtfs-scheduled/latest`, options);
     if (!response.ok) {
-      const listing = await fetch('https://www.zet.hr/gtfs2', { headers: zetStaticHeaders, signal: AbortSignal.timeout(15000) });
+      response.body?.destroy();
+      const listing = await fetchFeed(`${allowedOrigin}/gtfs2`, { ...options, maxBytes: 2 * 1024 * 1024, timeout: 15_000 });
       if (listing.ok) {
         const html = await listing.text();
         const latestZip = html.match(/href=["']([^"']*scheduled-\d{3}-\d{6}\.zip)["']/i)?.[1];
-        if (latestZip) {
-          const versionedUrl = new URL(latestZip, 'https://www.zet.hr');
-          response = await fetch(versionedUrl, { headers: zetStaticHeaders, signal: AbortSignal.timeout(30000) });
-        }
-      }
-    }
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    const zipPath = join(dataDir, 'gtfs.zip');
-    writeFileSync(zipPath, buffer);
-
-    const zip = new AdmZip(zipPath);
-    zip.extractAllTo(dataDir, true);
-
-    console.log('[GTFS Static] ZIP ekstraktovan, parsiranje podataka...');
-
-    const files = {
-      'routes.txt': 'routes',
-      'stops.txt': 'stops',
-      'trips.txt': 'trips',
-      'stop_times.txt': 'stopTimes',
-      'calendar.txt': 'calendar',
-      'calendar_dates.txt': 'calendarDates',
-      'shapes.txt': 'shapes',
-      'agency.txt': 'agency'
-    };
-
-    for (const [filename, key] of Object.entries(files)) {
-      const filePath = join(dataDir, filename);
-      if (existsSync(filePath)) {
-        if (key === 'stopTimes') {
-          console.log(`[GTFS Static] Streaming ${filename} (${gtfsData.trips.length} putovanja u indeksu)...`);
-          const indexed = await indexGtfsStopTimes(filePath, gtfsData.trips);
-          gtfsData.stopTimesByStop = indexed.byStop;
-          gtfsData.stopTimeCount = indexed.count;
-          console.log(`[GTFS Static] ✓ ${filename}: ${indexed.count} zapisa indeksirana po stanicama`);
-        } else {
-          const content = readFileSync(filePath, 'utf-8');
-          gtfsData[key] = parseGtfsCsv(content);
-          console.log(`[GTFS Static] ✓ ${filename}: ${gtfsData[key].length} zapisa`);
-        }
+        if (latestZip) response = await fetchFeed(new URL(latestZip, allowedOrigin), options);
       } else {
-        console.warn(`[GTFS Static] ⚠ ${filename} ne postoji`);
+        listing.body?.destroy();
       }
     }
 
-    if (!gtfsData.routes.length || !gtfsData.trips.length) {
-      throw new Error('GTFS feed nema ispravne routes.txt i trips.txt podatke');
-    }
-
+    gtfsData = await readStaticFeed(response);
     lastGtfsUpdate = new Date();
     gtfsLoaded = true;
     gtfsLoadError = null;
@@ -350,8 +343,7 @@ async function loadGtfsData() {
 
   } catch (error) {
     console.error(`[GTFS Static] ✗ Greška: ${error.message}`);
-    gtfsLoadError = error.message;
-    gtfsLoaded = false;
+    gtfsLoadError = 'GTFS_REFRESH_FAILED';
     if (!gtfsRetryTimer) {
       const delay = gtfsRetryDelay;
       gtfsRetryDelay = Math.min(gtfsRetryDelay * 2, 30 * 60 * 1000);
@@ -367,62 +359,26 @@ async function loadGtfsData() {
 }
 
 async function loadHzppData() {
-  const url = process.env.HZPP_GTFS_URL || 'https://www.hzpp.hr/GTFS_files.zip';
-  const dir = join(process.cwd(), 'gtfs_data', 'hzpp');
+  const url = new URL(process.env.HZPP_GTFS_URL || 'https://www.hzpp.hr/GTFS_files.zip');
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    mkdirSync(dir, { recursive: true });
-    const zipPath = join(dir, 'gtfs.zip');
-    writeFileSync(zipPath, Buffer.from(await response.arrayBuffer()));
-    new AdmZip(zipPath).extractAllTo(dir, true);
-    for (const [file, key] of Object.entries({ 'routes.txt':'routes', 'stops.txt':'stops', 'trips.txt':'trips', 'stop_times.txt':'stopTimes', 'calendar.txt':'calendar', 'calendar_dates.txt':'calendarDates' })) {
-      const path = join(dir, file);
-      if (!existsSync(path)) continue;
-      if (key === 'stopTimes') {
-        const indexed = await indexGtfsStopTimes(path, hzppData.trips);
-        hzppData.stopTimesByStop = indexed.byStop;
-        hzppData.stopTimeCount = indexed.count;
-      } else {
-        hzppData[key] = parseGtfsCsv(readFileSync(path, 'utf8'));
-      }
-    }
-    hzppLoaded = hzppData.stops.length > 0 && hzppData.trips.length > 0;
+    const response = await fetchFeed(url, { allowedOrigin: url.origin, maxBytes: archiveLimit, timeout: 60_000 });
+    Object.assign(hzppData, await readStaticFeed(response));
+    hzppLoaded = true;
     hzppLastUpdate = new Date();
-    console.log(`[HŽPP GTFS] ${hzppLoaded ? `učitano ${hzppData.stops.length} stanica` : 'nedostaju GTFS datoteke'}`);
   } catch (error) {
-    console.error(`[HŽPP GTFS] ${error.message}`);
-    hzppLoaded = false;
+    console.error('[HŽPP GTFS] Refresh failed:', error.name);
   }
 }
 
 async function loadBeogradData() {
   const url = 'https://data.gov.rs/sr/datasets/r/729be9a1-7ed9-453d-9a3d-68fa30f07529';
-  const dir = join(process.cwd(), 'gtfs_data', 'beograd');
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    mkdirSync(dir, { recursive: true });
-    const zipPath = join(dir, 'gtfs.zip');
-    writeFileSync(zipPath, Buffer.from(await response.arrayBuffer()));
-    new AdmZip(zipPath).extractAllTo(dir, true);
-    for (const [file, key] of Object.entries({ 'routes.txt':'routes', 'stops.txt':'stops', 'trips.txt':'trips', 'stop_times.txt':'stopTimes', 'calendar.txt':'calendar', 'calendar_dates.txt':'calendarDates', 'shapes.txt':'shapes', 'agency.txt':'agency' })) {
-      const path = join(dir, file);
-      if (!existsSync(path)) continue;
-      if (key === 'stopTimes') {
-        const indexed = await indexGtfsStopTimes(path, beogradData.trips);
-        beogradData.stopTimesByStop = indexed.byStop;
-        beogradData.stopTimeCount = indexed.count;
-      } else {
-        beogradData[key] = parseGtfsCsv(readFileSync(path, 'utf8'));
-      }
-    }
-    beogradLoaded = beogradData.routes.length > 0 && beogradData.stops.length > 0 && beogradData.trips.length > 0;
+    const response = await fetchFeed(url, { allowedOrigin: new URL(url).origin, maxBytes: archiveLimit, timeout: 60_000 });
+    Object.assign(beogradData, await readStaticFeed(response));
+    beogradLoaded = true;
     beogradLastUpdate = new Date();
-    console.log(`[Beograd GTFS] ${beogradLoaded ? `učitano ${beogradData.routes.length} linija, ${beogradData.stops.length} stanica, ${beogradData.trips.length} polazaka` : 'nedostaju osnovne GTFS datoteke'}`);
   } catch (error) {
-    console.error(`[Beograd GTFS] ${error.message}`);
-    beogradLoaded = false;
+    console.error('[Beograd GTFS] Refresh failed:', error.name);
   }
 }
 
@@ -463,7 +419,7 @@ async function fetchRealtimeVehiclesFromZet() {
   staleVehiclesDropped = 0;
 
   try {
-    const response = await fetch(rtUrl, { headers: zetRealtimeHeaders, signal: AbortSignal.timeout(10000) });
+    const response = await fetchFeed(rtUrl, { allowedOrigin: new URL(rtUrl).origin, headers: zetRealtimeHeaders, timeout: 10_000, maxBytes: 8 * 1024 * 1024 });
     if (!response.ok) {
       rtFeedStatus = `HTTP ${response.status}`;
       throw new Error(`HTTP ${response.status}`);
@@ -556,7 +512,7 @@ async function fetchRealtimeVehiclesFromZet() {
     const vehiclesByTrip = new Map(vehicles.filter(vehicle => vehicle.tripId).map(vehicle => [String(vehicle.tripId), vehicle]));
     return { vehicles, vehiclesByTrip, tripUpdatesByStop, cancelledTrips, staleVehiclesDropped: staleCount };
   } catch (error) {
-    rtFeedStatus = `greška: ${error.message}`;
+    rtFeedStatus = 'unavailable';
     console.error(`[GTFS-RT] ✗ ${error.message}`);
     return null;
   }
@@ -639,7 +595,10 @@ app.get('/api/shapes/:cityId', heavyLimiter, (req, res) => {
     return res.json({ shapes: [], status: 'unavailable' });
   }
 
-  const routeById = new Map(data.routes.map(route => [String(route.route_id), route]));
+  res.json(data.shapeResponse);
+});
+
+function buildShapeResponse(data) {
   const routeByShape = new Map();
   for (const trip of data.trips) {
     if (trip.shape_id && !routeByShape.has(String(trip.shape_id))) routeByShape.set(String(trip.shape_id), String(trip.route_id));
@@ -657,15 +616,15 @@ app.get('/api/shapes/:cityId', heavyLimiter, (req, res) => {
     return {
       id,
       routeId,
-      color: routeById.get(routeId)?.route_color || null,
+      color: data.routesById.get(routeId)?.route_color || null,
       coordinates: points.map(point => [Number(point.shape_pt_lat), Number(point.shape_pt_lon)])
     };
   });
-  res.json({ shapes, status: 'loaded', count: shapes.length });
-});
+  return { shapes, status: 'loaded', count: shapes.length };
+}
 
 // Vozila uživo
-app.get('/api/vehicles/:cityId', async (req, res) => {
+app.get('/api/vehicles/:cityId', asyncRoute(async (req, res) => {
   const { cityId } = req.params;
 
   if (cityId === 'hzpp') return res.json({ status: 'unavailable', message: 'HŽPP objavljuje statički vozni red; live lokacije nisu dostupne.', vehicles: [], lastUpdate: Date.now(), source: 'HŽPP GTFS' });
@@ -697,10 +656,10 @@ app.get('/api/vehicles/:cityId', async (req, res) => {
     lastUpdate: Date.now(),
     source: 'gtfs-realtime'
   });
-});
+}));
 
 // Polasci sa stanice
-app.get('/api/:cityId/stop/:stopId/departures', async (req, res) => {
+app.get('/api/:cityId/stop/:stopId/departures', asyncRoute(async (req, res) => {
   const { cityId, stopId } = req.params;
   const data = cityId === 'hzpp' ? hzppData : cityId === 'beograd' ? beogradData : gtfsData;
   const loaded = cityId === 'hzpp' ? hzppLoaded : cityId === 'beograd' ? beogradLoaded : gtfsLoaded;
@@ -710,7 +669,7 @@ app.get('/api/:cityId/stop/:stopId/departures', async (req, res) => {
     return res.status(503).json({ error: 'GTFS podaci nisu učitani' });
   }
 
-  const stop = data.stops.find(s => String(s.stop_id) === stopId);
+  const stop = data.stopsById.get(stopId);
   if (!stop) {
     return res.status(404).json({ error: 'Stanica nije pronađena' });
   }
@@ -729,8 +688,7 @@ app.get('/api/:cityId/stop/:stopId/departures', async (req, res) => {
   };
   const today = zagrebDateParts(new Date(now));
   const serviceDays = [today, addCalendarDays(today, -1)].map(date => ({ date, active: activeServicesOn(date) }));
-  const tripsById = new Map(data.trips.map(t => [String(t.trip_id), t]));
-  const routesById = new Map(data.routes.map(r => [String(r.route_id), r]));
+  const { tripsById, routesById } = data;
   const realtime = cityId === 'zagreb' ? await fetchRealtimeVehicles() : null;
   const stopLat = Number(stop.stop_lat);
   const stopLon = Number(stop.stop_lon);
@@ -815,7 +773,7 @@ app.get('/api/:cityId/stop/:stopId/departures', async (req, res) => {
         ? 'ZET ne šalje predviđanje za svako stajalište; Procjena uživo koristi lokaciju vozila, ostalo je po rasporedu.'
         : 'Prikazan je službeni vozni red.'
   });
-});
+}));
 
 // Status sistema
 app.get('/api/system/status', (req, res) => {
@@ -857,6 +815,9 @@ app.get('/', (req, res) => {
 app.get(['/verify-email', '/reset-password', '/confirm-parent', '/privacy', '/terms', '/cookies'], (req, res) => {
   const indexPath = join(frontendDist, 'index.html');
   if (!existsSync(indexPath)) return res.status(503).send('Frontend nije izgrađen. Pokrenite npm run build.');
+  if (['/verify-email', '/reset-password', '/confirm-parent'].includes(req.path.replace(/\/$/, '').toLowerCase())) {
+    res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+  }
   res.sendFile(indexPath);
 });
 app.get('/admin', (req, res) => {
@@ -867,7 +828,9 @@ app.get('/admin', (req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Neispravan format zahtjeva.' });
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Zahtjev je prevelik.' });
+  console.error('Request failed:', err.name);
   res.status(500).json({ error: 'Interna greška servera' });
 });
 

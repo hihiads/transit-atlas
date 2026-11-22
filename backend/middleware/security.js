@@ -1,4 +1,29 @@
 import rateLimit from 'express-rate-limit';
+import { createHash } from 'node:crypto';
+
+export const asyncRoute = handler => (req, res, next) => {
+  Promise.resolve().then(() => handler(req, res, next)).catch(next);
+};
+
+export function emailActionLimiter({ maxByIp, maxByEmail }) {
+  const options = {
+    windowMs: 15 * 60 * 1000,
+    message: { error: 'Previše zahtjeva. Pokušajte ponovno kasnije.' },
+    standardHeaders: true,
+    legacyHeaders: false
+  };
+  return [
+    rateLimit({ ...options, limit: maxByIp }),
+    rateLimit({
+      ...options,
+      limit: maxByEmail,
+      skip: req => typeof req.body?.email !== 'string',
+      keyGenerator: req => {
+        return createHash('sha256').update(req.body.email.trim().toLowerCase()).digest('hex');
+      }
+    })
+  ];
+}
 
 // Opći rate limiter za API
 export const apiLimiter = rateLimit({

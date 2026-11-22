@@ -38,7 +38,7 @@ function App() {
   const [authStatusLoading, setAuthStatusLoading] = useState(true);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has('token') || ['/verify-email', '/reset-password'].includes(window.location.pathname)) setShowAuthModal(true);
+    if (['/verify-email', '/reset-password'].includes(window.location.pathname)) setShowAuthModal(true);
   }, []);
 
   const [selectedType, setSelectedType] = useState<'all' | 'bus' | 'tram'>('all');

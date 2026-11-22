@@ -4,6 +4,7 @@ import RegisterForm from './RegisterForm';
 import ForgotPasswordForm from './ForgotPasswordForm';
 import { AuthResponse, resetPassword, SignedInUser, verifyEmail } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
+import { actionLinkToken } from '../../services/actionLink';
 
 interface AuthModalProps {
   onClose: () => void;
@@ -15,8 +16,10 @@ type View = 'login' | 'register' | 'forgot-password' | 'verify-email' | 'reset-p
 
 export default function AuthModal({ onClose, loginEnabled, registrationEnabled }: AuthModalProps) {
   const [view, setView] = useState<View>(() => window.location.pathname === '/verify-email' ? 'verify-email' : window.location.pathname === '/reset-password' ? 'reset-password' : !loginEnabled && registrationEnabled ? 'register' : 'login');
-  const [verificationToken, setVerificationToken] = useState(() => new URLSearchParams(window.location.search).get('token') || '');
-  const [verificationMessage, setVerificationMessage] = useState('Potvrdite email adresu za dovršetak registracije.');
+  const [verificationToken, setVerificationToken] = useState(actionLinkToken);
+  const [verificationPassword, setVerificationPassword] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState('Unesite lozinku koju ste odabrali pri registraciji.');
   const [parentMessage, setParentMessage] = useState('Provjerite email roditelja ili skrbnika kako bi potvrdio suglasnost.');
   const { login } = useAuth();
 
@@ -76,26 +79,38 @@ export default function AuthModal({ onClose, loginEnabled, registrationEnabled }
         )}
 
         {view === 'verify-email' && (
-          <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
+          <form className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg" onSubmit={async event => {
+            event.preventDefault();
+            setVerifying(true);
+            try {
+              await verifyEmail(verificationToken, verificationPassword);
+              setVerificationPassword('');
+              window.history.replaceState({}, '', '/');
+              setView(loginEnabled ? 'login' : 'register');
+            } catch (error) {
+              setVerificationMessage(error instanceof Error ? error.message : 'Potvrda nije uspjela.');
+            } finally {
+              setVerifying(false);
+            }
+          }}>
             <h2 className="text-2xl font-bold mb-4 text-center text-primary">Potvrda emaila</h2>
-            <p className="mb-4 text-sm text-gray-700">{verificationMessage}</p>
-            <button className="w-full bg-primary text-white py-2 px-4 rounded-lg" onClick={async () => {
-              try {
-                await verifyEmail(verificationToken);
-                setVerificationMessage('Email je potvrđen. Sada se možete prijaviti.');
-                window.history.replaceState({}, '', '/');
-                setView(loginEnabled ? 'login' : 'register');
-              } catch (error) {
-                setVerificationMessage(error instanceof Error ? error.message : 'Potvrda nije uspjela.');
-              }
-            }}>Potvrdi email</button>
-          </div>
+            <p className="mb-4 text-sm text-gray-700" aria-live="polite">{verificationMessage}</p>
+            <label className="mb-4 block text-sm font-medium">
+              Lozinka
+              <input type="password" autoComplete="current-password" required maxLength={128}
+                value={verificationPassword} onChange={event => setVerificationPassword(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-400 px-3 py-2" />
+            </label>
+            <button type="submit" disabled={verifying || !verificationToken} className="w-full bg-primary text-white py-2 px-4 rounded-lg disabled:opacity-50">
+              {verifying ? 'Potvrđujem…' : 'Potvrdi email'}
+            </button>
+          </form>
         )}
 
         {view === 'parent-consent' && <div className="w-full max-w-md mx-auto space-y-4 rounded-lg bg-white p-6 shadow-lg">
           <h2 className="text-2xl font-bold text-center text-primary">Čeka se roditeljska suglasnost</h2>
           <p className="text-sm leading-6 text-gray-800">{parentMessage}</p>
-          {verificationToken && <a className="block break-all rounded-lg bg-blue-50 p-3 text-sm font-medium text-blue-900 underline" href={`/confirm-parent?token=${encodeURIComponent(verificationToken)}`}>Otvori lokalnu poveznicu za potvrdu</a>}
+          {verificationToken && <a className="block break-all rounded-lg bg-blue-50 p-3 text-sm font-medium text-blue-900 underline" href={`/confirm-parent#token=${encodeURIComponent(verificationToken)}`}>Otvori lokalnu poveznicu za potvrdu</a>}
           <button type="button" onClick={onClose} className="w-full rounded-lg border border-slate-400 px-4 py-2 font-semibold text-slate-800 hover:bg-slate-100">Zatvori</button>
         </div>}
 

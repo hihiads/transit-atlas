@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { confirmParentConsent } from '../services/auth';
 import CookieNotice from './CookieNotice';
+import { actionLinkToken } from '../services/actionLink';
 
 export default function ParentConsentPage() {
-  const token = new URLSearchParams(window.location.search).get('token') || '';
+  const token = actionLinkToken;
   const [childEmail, setChildEmail] = useState('');
   const [checked, setChecked] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -13,7 +14,11 @@ export default function ParentConsentPage() {
 
   useEffect(() => {
     if (token.length !== 64) { setMessage('Poveznica nije ispravna ili je istekla.'); return; }
-    fetch(`/api/auth/parent-consent?token=${encodeURIComponent(token)}`, { credentials: 'include' })
+    fetch('/api/auth/parent-consent/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    })
       .then(async response => {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Poveznica nije ispravna ili je istekla.');
@@ -52,7 +57,7 @@ export default function ParentConsentPage() {
         <button type="button" disabled={!checked || loading} onClick={() => void submit()} className="mt-6 w-full rounded-lg bg-[#102638] px-4 py-3 font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-500">{loading ? 'Potvrđujem…' : 'Potvrdi suglasnost'}</button>
       </>}
       {completed && <a href="/" className="mt-6 inline-block rounded-lg bg-[#102638] px-4 py-3 font-semibold text-white">Natrag na Transitly</a>}
-      {verificationToken && <a href={`/verify-email?token=${encodeURIComponent(verificationToken)}`} className="mt-4 block text-sm font-semibold text-blue-800 underline">Potvrdi email djeteta (lokalno okruženje)</a>}
+      {verificationToken && <a href={`/verify-email#token=${encodeURIComponent(verificationToken)}`} className="mt-4 block text-sm font-semibold text-blue-800 underline">Potvrdi email djeteta (lokalno okruženje)</a>}
     </section>
     <CookieNotice />
   </main>;

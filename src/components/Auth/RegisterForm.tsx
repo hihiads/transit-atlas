@@ -14,6 +14,7 @@ declare global {
     turnstile?: {
       render: (element: HTMLElement, options: {
         sitekey: string;
+        action: string;
         callback: (token: string) => void;
         'error-callback': () => void;
         theme?: 'light' | 'dark';
@@ -51,6 +52,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
       if (window.turnstile && turnstileRef.current) {
         widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
           sitekey: turnstileSiteKey,
+          action: 'register',
           callback: (token: string) => setTurnstileToken(token),
           'error-callback': () => {
             setError('Turnstile provjera nije uspjela');

@@ -17,3 +17,13 @@ export function getAllowedOrigins() {
 export function isAllowedOrigin(origin) {
   return getAllowedOrigins().has(normalizeOrigin(origin));
 }
+
+export function requireTrustedOrigin(req, res, next) {
+  const origin = req.get('origin');
+  const safeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if ((origin && !getAllowedOrigins().has(origin)) ||
+      (!origin && !safeMethod && process.env.NODE_ENV === 'production')) {
+    return res.status(403).json({ error: 'Zahtjev nije dopušten.' });
+  }
+  next();
+}

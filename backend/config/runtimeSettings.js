@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
+import { randomUUID } from 'node:crypto';
 
 const settingsFile = process.env.ADMIN_SETTINGS_FILE || join(process.cwd(), 'backend', 'data', 'runtime-settings.json');
 let settings = {
@@ -36,13 +37,24 @@ export async function loadRuntimeSettings() {
 export async function saveRuntimeSettings(next) {
   const contents = JSON.stringify(next, null, 2);
   await mkdir(dirname(settingsFile), { recursive: true });
-  const temporaryFile = `${settingsFile}.tmp`;
+  const temporaryFile = `${settingsFile}.${randomUUID()}.tmp`;
   await writeFile(temporaryFile, contents, { mode: 0o600 });
   await rename(temporaryFile, settingsFile);
   settings = { ...next };
   return getRuntimeSettings();
 }
 
-export function missingAuthenticationEnvironment(next = settings) {
-  return ['MONGODB_URI', 'ADMIN_PANEL_PASSWORD'].filter(key => !process.env[key]);
+export function missingAuthenticationEnvironment() {
+  const missing = ['MONGODB_URI', 'ADMIN_PANEL_PASSWORD'].filter(key => !process.env[key]);
+  if (process.env.NODE_ENV === 'production') {
+    const secrets = ['SESSION_SECRET', 'PASSWORD_PEPPER'];
+    for (const key of secrets) {
+      const value = process.env[key];
+      if (!value || value.length < 32 || value.startsWith('replace-with-') ||
+          value === process.env.ADMIN_PANEL_PASSWORD || secrets.some(other => other !== key && value === process.env[other])) {
+        missing.push(key);
+      }
+    }
+  }
+  return missing;
 }

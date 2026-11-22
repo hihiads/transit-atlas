@@ -9,34 +9,83 @@ import PendingRegistration from '../models/PendingRegistration.js';
 import { randomBytes } from 'crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getRuntimeSettings, isAuthenticationEnabled } from '../config/runtimeSettings.js';
-import { isAllowedOrigin } from '../config/origins.js';
+import { requireTrustedOrigin } from '../config/origins.js';
+import { asyncRoute, emailActionLimiter } from '../middleware/security.js';
 import { deleteUserSessions } from '../services/authRuntime.js';
 
 const router = express.Router();
 const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const TERMS_VERSION = '2026-11-22';
+const registrationMessage = 'Ako se račun može otvoriti ili treba dodatnu potvrdu, provjerite email.';
+const verificationLifetime = 24 * 60 * 60 * 1000;
+
+async function deliverVerification(email, token) {
+  try {
+    return await sendVerificationEmail(email, token);
+  } catch (error) {
+    await User.updateOne({ email, emailVerificationToken: hashToken(token) }, {
+      $set: { emailVerificationToken: null, emailVerificationExpires: null }
+    });
+    throw error;
+  }
+}
 
 async function requestParentConsent({ email, guardianEmail, passwordHash = null, googleSubject = null }) {
   const token = generateToken();
-  await PendingRegistration.findOneAndUpdate({ email }, {
-    email, guardianEmail, passwordHash, googleSubject,
-    tokenHash: hashToken(token),
-    termsVersion: TERMS_VERSION,
-    termsAcceptedAt: new Date(),
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-  }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true });
-  const sent = await sendParentalConsentEmail(guardianEmail, token);
+  const tokenHash = hashToken(token);
+  try {
+    await PendingRegistration.updateOne({ email, expiresAt: { $lte: new Date() } }, {
+      $set: {
+        email, guardianEmail, passwordHash, googleSubject, tokenHash,
+        termsVersion: TERMS_VERSION,
+        termsAcceptedAt: new Date(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      }
+    }, { upsert: true, runValidators: true });
+  } catch (error) {
+    if (error.code === 11000) return { message: registrationMessage };
+    throw error;
+  }
+  let sent;
+  try {
+    sent = await sendParentalConsentEmail(guardianEmail, token);
+  } catch (error) {
+    await PendingRegistration.deleteOne({ email, tokenHash });
+    throw error;
+  }
   return {
-    message: 'Ako se račun može otvoriti ili treba dodatnu potvrdu, vidjet ćete daljnje upute.',
+    message: registrationMessage,
     ...(process.env.NODE_ENV !== 'production' ? { parentConsentRequired: true, ...(!sent ? { parentConsentToken: token } : {}) } : {})
   };
 }
 
+const tokenPattern = /^[a-f0-9]{64}$/;
+const actionToken = () => body('token').isString().bail().matches(tokenPattern);
+const emailInput = () => body('email').isString().bail().trim().isLength({ max: 255 }).isEmail().bail().normalizeEmail();
+const newPassword = () => body('password').isString().bail().isLength({ min: 8, max: 128 })
+  .withMessage('Lozinka mora imati između 8 i 128 znakova.');
+const guardianEmailInput = when => body('guardianEmail').if(when)
+  .isString().bail().trim().isLength({ max: 255 }).isEmail().bail().normalizeEmail()
+  .withMessage('Unesite ispravnu email adresu roditelja ili skrbnika.');
+
+const requireSetting = name => (req, res, next) => {
+  if (!getRuntimeSettings()[name]) return res.status(403).json({ error: 'Ova značajka trenutačno nije dostupna.' });
+  next();
+};
+
+const requireLogin = requireSetting('loginEnabled');
+const requireRegistration = requireSetting('registrationEnabled');
+
+function requireSession(req, res, next) {
+  if (!isAuthenticationEnabled() || !req.session) return res.status(403).json({ error: 'Prijava trenutačno nije dostupna.' });
+  next();
+}
+
 router.use((req, res, next) => {
-  const origin = req.get('origin');
-  if (origin && !isAllowedOrigin(origin)) return res.status(403).json({ error: 'Zahtjev nije dopušten' });
+  res.set('Cache-Control', 'no-store');
   next();
 });
+router.use(requireTrustedOrigin);
 
 router.get('/status', (req, res) => res.json({ ...getRuntimeSettings(), authenticationActive: isAuthenticationEnabled() }));
 
@@ -49,39 +98,33 @@ router.get('/providers', (req, res) => {
   });
 });
 
-router.use((req, res, next) => {
-  const settings = getRuntimeSettings();
-  if (req.path === '/logout' || req.path === '/status' || req.path === '/providers' || req.path === '/parent-consent') return next();
-  if (!isAuthenticationEnabled()) return res.status(403).json({ error: 'Prijava i registracija trenutačno su isključene.' });
-  if (req.path === '/login' && !settings.loginEnabled) return res.status(403).json({ error: 'Prijava trenutačno nije dostupna.' });
-  if (req.path === '/register' && !settings.registrationEnabled) return res.status(403).json({ error: 'Registracija trenutačno nije dostupna.' });
-  if (['/forgot-password', '/reset-password', '/me'].includes(req.path) && !settings.loginEnabled) return res.status(403).json({ error: 'Prijava trenutačno nije dostupna.' });
-  if (req.path.startsWith('/oauth/') && !settings.loginEnabled && !settings.registrationEnabled) return res.status(403).json({ error: 'Prijava i registracija trenutačno su isključene.' });
-  next();
-});
-
-router.post('/oauth/challenge', body('provider').equals('google'), async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ error: 'Odaberite dostupnu prijavu.' });
-  const { provider } = req.body;
-  const intent = req.body.intent === 'register' ? 'register' : 'login';
-  const ageRange = req.body.ageRange;
-  const guardianEmail = typeof req.body.guardianEmail === 'string' ? req.body.guardianEmail.trim().toLowerCase() : '';
-  if (intent === 'register' && (req.body.termsAccepted !== true || !['10-15', '16+'].includes(ageRange) || (ageRange === '10-15' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guardianEmail)))) {
-    return res.status(400).json({ error: 'Prihvatite uvjete i unesite dobnu skupinu te email roditelja/skrbnika ako imate 10–15 godina.' });
-  }
-  const settings = getRuntimeSettings();
-  if (intent === 'register' && !settings.registrationEnabled) return res.status(403).json({ error: 'Registracija trenutačno nije dostupna.' });
-  if (!settings.googleEnabled || !process.env.GOOGLE_CLIENT_ID) {
-    return res.status(503).json({ error: 'Ova prijava trenutačno nije postavljena.' });
-  }
-  const challenge = { nonce: randomBytes(32).toString('base64url'), state: randomBytes(24).toString('base64url'), expires: Date.now() + 5 * 60 * 1000 };
-  req.session.oauthChallenges = { ...req.session.oauthChallenges, [provider]: { ...challenge, intent, ageRange, guardianEmail, termsAccepted: req.body.termsAccepted === true } };
-  res.json(challenge);
-});
+router.post('/oauth/challenge', requireSession,
+  body('provider').isString().bail().equals('google'),
+  guardianEmailInput((value, { req }) => req.body?.intent === 'register' && req.body.ageRange === '10-15'),
+  asyncRoute(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Provjerite podatke za Google prijavu.' });
+    const { provider, ageRange, termsAccepted } = req.body;
+    const intent = req.body.intent === 'register' ? 'register' : 'login';
+    const guardianEmail = intent === 'register' && ageRange === '10-15' ? req.body.guardianEmail : '';
+    if (intent === 'register' && (termsAccepted !== true || !['10-15', '16+'].includes(ageRange))) {
+      return res.status(400).json({ error: 'Prihvatite uvjete i odaberite dobnu skupinu.' });
+    }
+    const settings = getRuntimeSettings();
+    if (intent === 'register' && !settings.registrationEnabled) return res.status(403).json({ error: 'Registracija trenutačno nije dostupna.' });
+    if (intent === 'login' && !settings.loginEnabled) return res.status(403).json({ error: 'Prijava trenutačno nije dostupna.' });
+    if (!settings.googleEnabled || !process.env.GOOGLE_CLIENT_ID) {
+      return res.status(503).json({ error: 'Ova prijava trenutačno nije postavljena.' });
+    }
+    const challenge = { nonce: randomBytes(32).toString('base64url'), state: randomBytes(24).toString('base64url'), expires: Date.now() + 5 * 60 * 1000 };
+    req.session.oauthChallenges = { ...req.session.oauthChallenges, [provider]: { ...challenge, intent, ageRange, guardianEmail, termsAccepted: termsAccepted === true } };
+    res.json(challenge);
+  })
+);
 
 router.post('/oauth/:provider',
-  body('idToken').isJWT(),
+  requireSession,
+  body('idToken').isString().bail().isJWT(),
   async (req, res) => {
     const provider = req.params.provider;
     if (provider !== 'google') return res.status(404).json({ error: 'Nepoznata prijava.' });
@@ -102,34 +145,33 @@ router.post('/oauth/:provider',
       const verified = await jwtVerify(req.body.idToken, googleKeys, {
         issuer: ['https://accounts.google.com', 'accounts.google.com'],
         audience: clientId,
-        algorithms: ['RS256']
+        algorithms: ['RS256'],
+        requiredClaims: ['exp', 'sub', 'iat']
       });
       const claims = verified.payload;
-      if (claims.nonce !== challenge.nonce || !claims.sub || typeof claims.email !== 'string' ||
+      if (claims.nonce !== challenge.nonce || typeof claims.sub !== 'string' || !claims.sub || typeof claims.email !== 'string' ||
           (claims.email_verified !== true && claims.email_verified !== 'true')) {
         return res.status(401).json({ error: 'Račun nije moguće potvrditi kod pružatelja prijave.' });
       }
 
       const email = claims.email.toLowerCase();
       if (challenge.ageRange === '10-15' && challenge.guardianEmail === email) return res.status(400).json({ error: 'Za roditeljsku potvrdu unesite email koji se razlikuje od Google emaila.' });
-      const subjectField = 'googleSubject';
-      let user = await User.findOne({ [subjectField]: claims.sub });
-      const emailUser = await User.findOne({ email });
-      if (user && emailUser && String(user._id) !== String(emailUser._id)) {
-        return res.status(409).json({ error: 'Ovaj račun već je povezan s drugom prijavom.' });
-      }
-      user ||= emailUser;
+      let user = await User.findOne({ googleSubject: claims.sub });
       const settings = getRuntimeSettings();
-      if (user && !settings.loginEnabled) return res.status(403).json({ error: 'Prijava trenutačno nije dostupna.' });
-      if (!user && (challenge.intent !== 'register' || !settings.registrationEnabled)) return res.status(404).json({ error: 'Google račun još nije registriran. Otvorite registraciju i prihvatite uvjete.' });
       if (user) {
-        if (user[subjectField] && user[subjectField] !== claims.sub) {
-          return res.status(409).json({ error: 'Ovaj email već koristi drugi račun.' });
+        if (!settings.loginEnabled || !user.emailVerified) {
+          return res.status(403).json({ error: 'Prijava trenutačno nije dostupna.' });
         }
-        user[subjectField] = claims.sub;
-        user.emailVerified = true;
-        await user.save();
       } else {
+        if (challenge.intent !== 'register' || !settings.registrationEnabled) {
+          return res.status(404).json({ error: 'Google račun još nije registriran. Otvorite registraciju i prihvatite uvjete.' });
+        }
+        if (await User.exists({ email })) {
+          return res.status(409).json({ error: 'Za ovu adresu koristite postojeći način prijave.' });
+        }
+        if (!email.endsWith('@gmail.com') && !(typeof claims.hd === 'string' && claims.hd)) {
+          return res.status(403).json({ error: 'Za ovu adresu registrirajte se emailom i potvrdite poveznicu iz sandučića.' });
+        }
         if (challenge.ageRange === '10-15') {
           const result = await requestParentConsent({ email, guardianEmail: challenge.guardianEmail, googleSubject: claims.sub });
           return res.json(result);
@@ -138,12 +180,16 @@ router.post('/oauth/:provider',
         user = await User.create({
           email,
           emailVerified: true,
-          [subjectField]: claims.sub,
+          googleSubject: claims.sub,
           passwordHash: await hashPassword(randomBytes(48).toString('hex')),
           ageRange: challenge.ageRange,
           termsVersion: TERMS_VERSION,
           termsAcceptedAt: new Date()
         });
+      }
+
+      if (!getRuntimeSettings().loginEnabled) {
+        return res.json({ message: 'Račun je kreiran. Prijava trenutačno nije dostupna.' });
       }
 
       req.session.regenerate(error => {
@@ -156,7 +202,7 @@ router.post('/oauth/:provider',
         });
       });
     } catch (error) {
-      console.error(`${provider} sign-in failed:`, error.message);
+      console.error('Google sign-in failed:', error.name);
       res.status(401).json({ error: 'Prijava nije uspjela. Pokušajte ponovno.' });
     }
   }
@@ -164,20 +210,14 @@ router.post('/oauth/:provider',
 
 // Registracija
 router.post('/register',
-  verifyTurnstile,
-  body('email')
-    .trim()
-    .isEmail()
-    .withMessage('Neispravna email adresa')
-    .normalizeEmail()
-    .isLength({ max: 255 })
-    .withMessage('Email adresa predugačka'),
-  body('password')
-    .isLength({ min: 8, max: 128 })
-    .withMessage('Lozinka mora imati najmanje 8 znakova'),
+  requireRegistration,
+  emailInput(),
+  emailActionLimiter({ maxByIp: 15, maxByEmail: 5 }),
+  verifyTurnstile('register'),
+  newPassword(),
   body('termsAccepted').custom(value => value === true).withMessage('Prihvatite uvjete korištenja za nastavak'),
-  body('ageRange').isIn(['10-15', '16+']).withMessage('Odaberite dobnu skupinu'),
-  body('guardianEmail').custom((value, { req }) => req.body.ageRange !== '10-15' || (typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.trim().toLowerCase() !== String(req.body.email).trim().toLowerCase())).withMessage('Unesite email roditelja ili skrbnika koji se razlikuje od emaila djeteta'),
+  body('ageRange').isString().bail().isIn(['10-15', '16+']).withMessage('Odaberite dobnu skupinu'),
+  guardianEmailInput((value, { req }) => req.body?.ageRange === '10-15'),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -185,6 +225,9 @@ router.post('/register',
     }
 
     const { email, password, ageRange, guardianEmail } = req.body;
+    if (ageRange === '10-15' && guardianEmail === email) {
+      return res.status(400).json({ error: 'Email skrbnika mora se razlikovati od emaila djeteta.' });
+    }
 
     try {
       // Provjeri postoji li korisnik (vremenska konzistentnost da bi se spriječila enumeracija)
@@ -193,12 +236,21 @@ router.post('/register',
       if (existingUser) {
         if (!existingUser.emailVerified) {
           const token = generateToken();
-          existingUser.emailVerificationToken = hashToken(token);
-          existingUser.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-          await existingUser.save();
-          await sendVerificationEmail(email, token);
+          const result = await User.updateOne({
+            _id: existingUser._id,
+            emailVerified: false,
+            $or: [{ emailVerificationExpires: null }, { emailVerificationExpires: { $lte: new Date() } }]
+          }, {
+            $set: { emailVerificationToken: hashToken(token), emailVerificationExpires: new Date(Date.now() + verificationLifetime) }
+          });
+          if (result.modifiedCount === 1) {
+            const emailSent = await deliverVerification(email, token);
+            if (process.env.NODE_ENV !== 'production' && !emailSent) {
+              return res.status(202).json({ message: registrationMessage, verificationToken: token });
+            }
+          }
         }
-        return res.status(202).json({ message: 'Ako se račun može otvoriti ili treba dodatnu potvrdu, vidjet ćete daljnje upute.' });
+        return res.status(202).json({ message: registrationMessage });
       }
 
       const passwordHash = await hashPassword(password);
@@ -218,18 +270,19 @@ router.post('/register',
         termsVersion: TERMS_VERSION,
         termsAcceptedAt: new Date(),
         emailVerificationToken: hashedToken,
-        emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
+        emailVerificationExpires: new Date(Date.now() + verificationLifetime)
       });
 
       await user.save();
 
-      const emailSent = await sendVerificationEmail(email, verificationToken);
-      res.status(201).json({
-        message: emailSent ? 'Račun je kreiran. Provjerite email za poveznicu za potvrdu.' : 'Račun je kreiran. Email nije poslan jer lokalni SMTP nije postavljen.',
+      const emailSent = await deliverVerification(email, verificationToken);
+      res.status(202).json({
+        message: registrationMessage,
         ...(process.env.NODE_ENV !== 'production' && !emailSent ? { verificationToken } : {})
       });
     } catch (error) {
-      console.error('Registration error:', error.message);
+      if (error.code === 11000) return res.status(202).json({ message: registrationMessage });
+      console.error('Registration error:', error.name);
       res.status(500).json({ error: 'Greška pri registraciji' });
     }
   }
@@ -237,8 +290,10 @@ router.post('/register',
 
 // Prijava
 router.post('/login',
-  body('email').trim().isEmail().normalizeEmail(),
-  body('password').notEmpty(),
+  requireLogin,
+  requireSession,
+  emailInput(),
+  body('password').isString().bail().isLength({ min: 1, max: 128 }),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -270,7 +325,7 @@ router.post('/login',
       // Regeneriraj sesiju za zaštitu od fiksacije
       req.session.regenerate((err) => {
         if (err) {
-          console.error('Session regeneration error:', err);
+          console.error('Session regeneration error:', err.name);
           return res.status(500).json({ error: 'Greška pri prijavi' });
         }
 
@@ -287,7 +342,7 @@ router.post('/login',
         });
       });
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error:', error.name);
       res.status(500).json({ error: 'Greška pri prijavi' });
     }
   }
@@ -298,7 +353,7 @@ router.post('/logout', (req, res) => {
   if (req.session) {
     req.session.destroy((err) => {
       if (err) {
-        console.error('Logout error:', err);
+        console.error('Logout error:', err.name);
         return res.status(500).json({ error: 'Greška pri odjavi' });
       }
       res.clearCookie('sessionId', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
@@ -309,7 +364,7 @@ router.post('/logout', (req, res) => {
   }
 });
 
-router.post('/parent-consent', body('token').isLength({ min: 64, max: 64 }), body('consent').custom(value => value === true), async (req, res) => {
+router.post('/parent-consent', requireRegistration, actionToken(), body('consent').custom(value => value === true), async (req, res) => {
   if (!validationResult(req).isEmpty()) return res.status(400).json({ error: 'Poveznica nije ispravna ili je istekla.' });
   try {
     const pending = await PendingRegistration.findOne({ tokenHash: hashToken(req.body.token), expiresAt: { $gt: new Date() } });
@@ -345,17 +400,15 @@ router.post('/parent-consent', body('token').isLength({ min: 64, max: 64 }), bod
     await pending.deleteOne();
     res.json({ message: 'Suglasnost je potvrđena. Dijete se sada može prijaviti Google računom.' });
   } catch (error) {
-    console.error('Parent consent error:', error.message);
+    console.error('Parent consent error:', error.name);
     res.status(500).json({ error: 'Potvrda suglasnosti nije uspjela. Pokušajte ponovno.' });
   }
 });
 
-router.get('/parent-consent', async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  const token = req.query.token;
-  if (typeof token !== 'string' || token.length !== 64) return res.status(400).json({ error: 'Poveznica nije ispravna ili je istekla.' });
+router.post('/parent-consent/preview', requireRegistration, actionToken(), async (req, res) => {
+  if (!validationResult(req).isEmpty()) return res.status(400).json({ error: 'Poveznica nije ispravna ili je istekla.' });
   try {
-    const pending = await PendingRegistration.findOne({ tokenHash: hashToken(token), expiresAt: { $gt: new Date() } }).select('email');
+    const pending = await PendingRegistration.findOne({ tokenHash: hashToken(req.body.token), expiresAt: { $gt: new Date() } }).select('email');
     if (!pending) return res.status(400).json({ error: 'Poveznica nije ispravna ili je istekla.' });
     res.json({ childEmail: pending.email });
   } catch (error) {
@@ -378,7 +431,7 @@ router.delete('/me', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/me', requireAuth, async (req, res) => {
+router.get('/me', requireLogin, requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId).select('-passwordHash -emailVerificationToken -passwordResetToken');
 
@@ -395,41 +448,43 @@ router.get('/me', requireAuth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get user error:', error);
+    console.error('Get user error:', error.name);
     res.status(500).json({ error: 'Greška pri dohvaćanju korisnika' });
   }
 });
 
 // Verifikacija emaila
 router.post('/verify-email',
-  body('token').isLength({ min: 64, max: 64 }),
+  requireSession,
+  actionToken(),
+  body('password').isString().bail().isLength({ min: 1, max: 128 }),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ error: 'Neispravan token' });
     }
 
-    const { token } = req.body;
-    const hashedToken = hashToken(token);
-
     try {
-      const user = await User.findOne({
-        emailVerificationToken: hashedToken,
-        emailVerificationExpires: { $gt: Date.now() }
+      const filter = () => ({
+        emailVerificationToken: hashToken(req.body.token),
+        emailVerificationExpires: { $gt: new Date() },
+        emailVerified: false
       });
+      const user = await User.findOne(filter()).select('passwordHash');
+      if (!user || !await verifyPassword(req.body.password, user.passwordHash)) {
+        return res.status(400).json({ error: 'Poveznica ili lozinka nije ispravna.' });
+      }
 
-      if (!user) {
+      const result = await User.updateOne({ _id: user._id, ...filter(), passwordHash: user.passwordHash }, {
+        $set: { emailVerified: true, emailVerificationToken: null, emailVerificationExpires: null }
+      });
+      if (result.modifiedCount !== 1) {
         return res.status(400).json({ error: 'Token je neispravan ili je istekao' });
       }
 
-      user.emailVerified = true;
-      user.emailVerificationToken = null;
-      user.emailVerificationExpires = null;
-      await user.save();
-
       res.json({ message: 'Email uspješno verificiran' });
     } catch (error) {
-      console.error('Email verification error:', error);
+      console.error('Email verification error:', error.name);
       res.status(500).json({ error: 'Greška pri verifikaciji' });
     }
   }
@@ -437,8 +492,10 @@ router.post('/verify-email',
 
 // Zahtjev za reset lozinke
 router.post('/forgot-password',
-  verifyTurnstile,
-  body('email').trim().isEmail().normalizeEmail(),
+  requireLogin,
+  emailInput(),
+  emailActionLimiter({ maxByIp: 15, maxByEmail: 5 }),
+  verifyTurnstile('forgot_password'),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -449,17 +506,26 @@ router.post('/forgot-password',
     const { email } = req.body;
 
     try {
-      const user = await User.findOne({ email });
+      const resetToken = generateToken();
+      const hashedToken = hashToken(resetToken);
+      const user = await User.findOneAndUpdate({
+        email,
+        emailVerified: true,
+        $or: [{ passwordResetExpires: null }, { passwordResetExpires: { $lte: new Date() } }]
+      }, {
+        $set: { passwordResetToken: hashedToken, passwordResetExpires: new Date(Date.now() + 60 * 60 * 1000) }
+      }).select('_id');
 
       if (user) {
-        const resetToken = generateToken();
-        const hashedToken = hashToken(resetToken);
-
-        user.passwordResetToken = hashedToken;
-        user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1h
-        await user.save();
-
-        const emailSent = await sendPasswordResetEmail(email, resetToken);
+        let emailSent;
+        try {
+          emailSent = await sendPasswordResetEmail(email, resetToken);
+        } catch (error) {
+          await User.updateOne({ _id: user._id, passwordResetToken: hashedToken }, {
+            $set: { passwordResetToken: null, passwordResetExpires: null }
+          });
+          throw error;
+        }
         if (process.env.NODE_ENV !== 'production' && !emailSent) {
           return res.json({ message: 'Lokalni SMTP nije postavljen.', resetToken });
         }
@@ -468,7 +534,7 @@ router.post('/forgot-password',
       // Uvijek vrati uspjeh protiv enumeracije
       res.json({ message: 'Ako račun postoji, poslat će se email s uputama.' });
     } catch (error) {
-      console.error('Forgot password error:', error);
+      console.error('Forgot password error:', error.name);
       res.json({ message: 'Ako račun postoji, poslat će se email s uputama.' });
     }
   }
@@ -476,8 +542,9 @@ router.post('/forgot-password',
 
 // Reset lozinke
 router.post('/reset-password',
-  body('token').isLength({ min: 64, max: 64 }),
-  body('password').isLength({ min: 8, max: 128 }),
+  requireLogin,
+  actionToken(),
+  newPassword(),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -485,28 +552,22 @@ router.post('/reset-password',
     }
 
     const { token, password } = req.body;
-    const hashedToken = hashToken(token);
-
     try {
-      const user = await User.findOne({
-        passwordResetToken: hashedToken,
-        passwordResetExpires: { $gt: Date.now() }
+      const hashedToken = hashToken(token);
+      const resetFilter = () => ({ passwordResetToken: hashedToken, passwordResetExpires: { $gt: new Date() } });
+      const user = await User.exists(resetFilter());
+      if (!user) return res.status(400).json({ error: 'Token je neispravan ili je istekao' });
+
+      const passwordHash = await hashPassword(password);
+      const result = await User.updateOne({ _id: user._id, ...resetFilter() }, {
+        $set: { passwordHash, passwordResetToken: null, passwordResetExpires: null },
+        $inc: { sessionVersion: 1 }
       });
+      if (result.modifiedCount !== 1) return res.status(400).json({ error: 'Token je neispravan ili je istekao' });
 
-      if (!user) {
-        return res.status(400).json({ error: 'Token je neispravan ili je istekao' });
-      }
-
-      user.passwordHash = await hashPassword(password);
-      user.sessionVersion = (user.sessionVersion || 0) + 1;
-      user.passwordResetToken = null;
-      user.passwordResetExpires = null;
-      await user.save();
-
-      // Invalidiraj sve postojeće sesije - zahtijeva ponovno prijavljivanje
       res.json({ message: 'Lozinka uspješno promijenjena. Prijavite se s novom lozinkom.' });
     } catch (error) {
-      console.error('Reset password error:', error);
+      console.error('Reset password error:', error.name);
       res.status(500).json({ error: 'Greška pri promjeni lozinke' });
     }
   }

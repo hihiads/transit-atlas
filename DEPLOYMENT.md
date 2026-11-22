@@ -16,7 +16,6 @@ MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/transit-atlas?retryW
 SESSION_SECRET=<generirajte-48-random-znakova>
 PASSWORD_PEPPER=<generirajte-48-random-znakova>
 ADMIN_PANEL_PASSWORD=<duga-nasumična-lozinka>
-# ADMIN_PANEL_SECRET je opcionalan; ADMIN_PANEL_PASSWORD se koristi za potpis ako nije postavljen.
 AUTH_LOGIN_ENABLED=true
 AUTH_REGISTRATION_ENABLED=true
 AUTH_GOOGLE_ENABLED=true
@@ -47,7 +46,9 @@ APPLE_REDIRECT_URI=https://vaša-domena.com
 
 **VAŽNO**: `PORT` varijablu **NE** postavljate - hosting provider automatski postavlja `process.env.PORT`.
 
-Administratorski panel nalazi se na `/admin`; postavite `ADMIN_PANEL_PASSWORD`. Potpisna tajna je opcionalna. Ako obje opcije autentifikacije postavite na `false`, server ne spaja MongoDB. Kad su prijava ili registracija uključene, jedina dodatna env provjera pri pokretanju je `MONGODB_URI`. SMTP i Turnstile koriste se samo kad su njihove funkcije pozvane. Za postojane postavke na hostingu s više instanci postavite `ADMIN_SETTINGS_FILE` na zajednički trajni volumen.
+Administratorski panel nalazi se na `/admin`. Postavite `ADMIN_PANEL_PASSWORD` i zaštitite `/admin` i `/api/admin` na svim javnim hostnameovima identitetskim pristupom s MFA-om. Admin sesija traje 30 minuta, opoziva se pri odjavi i pohranjena je u memoriji jedne instance. Kod postavljanja više instanci potreban je zajednički store sesija i postavki.
+
+Kad su prijava ili registracija uključene, produkcija zahtijeva `MONGODB_URI`, `SESSION_SECRET` i `PASSWORD_PEPPER`. Postavite zasebne tajne od najmanje 32 znaka. Za postojeće račune zadržite pepper s kojim su hashirane njihove lozinke. Postavite točan HTTPS origin aplikacije u `APP_ORIGIN`, HTTPS adresu u `APP_BASE_URL` i SMTP s TLS-om. Turnstile hostname mora odgovarati jednom od originova u `APP_ORIGIN`.
 
 ## 🔐 Generiranje sigurnih tajni
 
