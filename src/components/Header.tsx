@@ -31,22 +31,22 @@ export default function Header({
 
   return (
     <header className="relative z-[1001] border-b border-white/10 bg-[#102638] text-white shadow-[0_8px_28px_rgba(15,35,50,0.18)]">
-      <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-3 px-3 py-3 sm:px-5 sm:py-3.5">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#a9f0d1] text-[#102638] shadow-inner shadow-white/30">
-            <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-2 px-3 py-1.5 sm:gap-3 sm:px-5 sm:py-3.5">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#a9f0d1] text-[#102638] shadow-inner shadow-white/30 sm:h-10 sm:w-10 sm:rounded-2xl">
+            <svg className="h-5 w-5 sm:h-6 sm:w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M7 3.75h10a2.25 2.25 0 0 1 2.25 2.25v9A2.25 2.25 0 0 1 17 17.25H7A2.25 2.25 0 0 1 4.75 15V6A2.25 2.25 0 0 1 7 3.75Z" stroke="currentColor" strokeWidth="1.8" />
               <path d="M7.5 7h9v5h-9zM8 20l2-2.75m6 2.75L14 17.25M8 14.5h.01m8-.01h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">Transitly</h1>
+              <h1 className="truncate text-base font-bold tracking-tight sm:text-xl">Transitly</h1>
               <span className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold sm:inline-flex ${status.style}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />{status.label}
               </span>
             </div>
-            <p className="hidden text-xs text-slate-300 sm:block">Linije i polasci javnog prijevoza</p>
+            <p className="hidden text-xs text-slate-300 md:block">Linije i polasci javnog prijevoza</p>
           </div>
         </div>
 
@@ -68,16 +68,15 @@ export default function Header({
           ) : null}
         </div>
       </div>
-      <div className="flex items-center gap-1.5 px-3 pb-2 sm:hidden">
+      <div className="flex items-center gap-1.5 px-3 pb-1.5 sm:hidden">
         <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold ${status.style}`}><span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />{status.label}</span>
-        <span className="text-[10px] text-slate-300">· Linije i polasci javnog prijevoza</span>
       </div>
-      <nav aria-label="Pravne informacije" className="flex flex-wrap gap-x-4 gap-y-1 px-4 pb-2 text-[11px] text-slate-200">
+      <nav aria-label="Pravne informacije" className="flex flex-nowrap gap-x-4 overflow-x-auto whitespace-nowrap px-4 pb-1.5 text-[10px] text-slate-200 sm:flex-wrap sm:overflow-visible sm:whitespace-normal sm:pb-2 sm:text-[11px]">
         <a className="underline underline-offset-2 hover:text-white" href="/privacy">Privatnost</a>
         <a className="underline underline-offset-2 hover:text-white" href="/terms">Uvjeti korištenja</a>
         <a className="underline underline-offset-2 hover:text-white" href="/cookies">Kolačići</a>
         <a className="underline underline-offset-2 hover:text-white" href="mailto:info@transitly.eu">Kontakt: info@transitly.eu</a>
-        <span>Transitly vodi Din Mulajusufović</span>
+        <span className="hidden sm:inline">Transitly vodi Din Mulajusufović</span>
       </nav>
       {showDelete && <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" role="presentation">
         <section role="dialog" aria-modal="true" aria-labelledby="delete-account-title" aria-describedby="delete-account-description" onKeyDown={event => {

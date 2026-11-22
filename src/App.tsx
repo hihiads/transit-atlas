@@ -21,6 +21,7 @@ function App() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [showMapMenu, setShowMapMenu] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataStatus, setDataStatus] = useState<'demo' | 'live' | 'unavailable'>('demo');
@@ -308,139 +309,28 @@ function App() {
         registrationEnabled={authStatus.registrationEnabled}
       />
 
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        <div className="hidden w-80 shrink-0 overflow-y-auto border-r border-slate-200/80 bg-[#f3f7f6] p-4 md:block lg:w-[352px] lg:p-5">
-          <FilterPanel
-            vehicles={vehicles}
-            routes={routes}
-            selectedType={selectedType}
-            selectedLine={selectedLine}
-            onTypeChange={(type) => {
-              setSelectedType(type);
-              setSelectedLine('');
-            }}
-            onLineChange={setSelectedLine}
-          />
-
-          <div className="mt-4 space-y-2.5">
-            <button onClick={findMyLocation} disabled={locating} className="w-full rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 text-left font-semibold text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md disabled:opacity-60">
-              {locating ? 'Tražim lokaciju…' : 'Moja lokacija'}
-              <span className="mt-1 block text-xs font-normal text-slate-500">Prikaži me na karti</span>
-            </button>
-            <button onClick={findNearestStop} disabled={locating} className="w-full rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 text-left font-semibold text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md disabled:opacity-60">
-              {locating ? 'Tražim…' : 'Moja najbliža stanica'}
-              <span className="mt-1 block text-xs font-normal text-slate-500">Prikaži stanicu i udaljenost</span>
-            </button>
-            <button
-              onClick={() => setShowSchedule(true)}
-              className="w-full rounded-2xl bg-[#102638] px-4 py-3.5 font-semibold text-white shadow-md shadow-slate-900/10 transition hover:bg-[#183a4d]"
-            >
-              Linije i polasci
-            </button>
-
-            <button
-              onClick={() => setShowStops(!showStops)}
-              className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
-                showStops
-                  ? 'bg-teal-700 text-white shadow-sm hover:bg-teal-800'
-                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {showStops ? '✓ Sakrij stanice' : '🚏 Prikaži stanice'}
-            </button>
-
-            <button
-              onClick={() => setShowShapes(!showShapes)}
-              className={`w-full rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${showShapes ? 'border-indigo-700 bg-indigo-700 text-white hover:bg-indigo-800' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
-            >
-              {showShapes ? '✓ Sakrij trase linija' : 'Prikaži trase linija'}
-            </button>
-          </div>
-          {locationMessage && <p className="mt-2 text-sm text-slate-600" role="status">{locationMessage}</p>}
-
-          {selectedCity.status === 'unavailable' && (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-5 text-amber-900">
-              <strong>Grad trenutno nije podržan.</strong><br />
-              Podaci za {selectedCity.name} još nisu dostupni.
+      <div className="flex-1 relative min-h-0">
+        <div className="absolute right-3 top-3 z-[999] flex flex-col items-end sm:right-4 sm:top-4">
+          <button type="button" aria-expanded={showMapMenu} aria-controls="map-controls-menu" onClick={() => setShowMapMenu(!showMapMenu)} className="flex min-h-11 items-center gap-2 rounded-2xl border border-white/70 bg-[#102638]/95 px-4 py-3 text-sm font-semibold text-white shadow-xl backdrop-blur hover:bg-[#183a4d] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400">
+            <span aria-hidden="true" className="text-lg leading-none">☰</span> Izbornik karte
+          </button>
+          {showMapMenu && <div id="map-controls-menu" className="mt-2 max-h-[min(70vh,34rem)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-white/70 bg-[#f3f7f6]/95 p-3 shadow-2xl backdrop-blur sm:p-4">
+            <FilterPanel compact vehicles={vehicles} routes={routes} selectedType={selectedType} selectedLine={selectedLine} onTypeChange={(type) => { setSelectedType(type); setSelectedLine(''); }} onLineChange={setSelectedLine} />
+            <div className="mt-2 grid grid-cols-1 gap-2">
+              <button onClick={() => { findMyLocation(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? 'Tražim lokaciju…' : 'Moja lokacija'}</button>
+              <button onClick={() => { findNearestStop(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? 'Tražim…' : 'Moja najbliža stanica'}</button>
+              <button onClick={() => { setShowSchedule(true); setShowMapMenu(false); }} className="min-h-11 rounded-xl bg-[#102638] px-3 py-2.5 text-left text-sm font-semibold text-white shadow-sm">Linije i polasci</button>
+              <button onClick={() => setShowStops(!showStops)} aria-pressed={showStops} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showStops ? '✓ Sakrij stanice' : 'Prikaži stanice'}</button>
+              <button onClick={() => setShowShapes(!showShapes)} aria-pressed={showShapes} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showShapes ? '✓ Sakrij trase linija' : 'Prikaži trase linija'}</button>
             </div>
-          )}
-
-          {dataStatus === 'live' && (
-            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-5 text-emerald-900">
-              <strong>✓ Podaci uživo</strong><br />
-              Prikazuju se lokacije koje šalje ZET.
-            </div>
-          )}
-
-          {dataStatus === 'unavailable' && selectedCity.id === 'zagreb' && (
-            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-5 text-rose-900">
-              <strong>Lokacije trenutačno nisu dostupne</strong><br />
-              Pokušajte ponovno malo kasnije.
-            </div>
-          )}
+            {locationMessage && <p className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-700" role="status">{locationMessage}</p>}
+            {selectedCity.status === 'unavailable' && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Podaci za {selectedCity.name} još nisu dostupni.</p>}
+            {dataStatus === 'live' && <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">✓ Podaci uživo · lokacije koje šalje ZET.</p>}
+            {dataStatus === 'unavailable' && selectedCity.id === 'zagreb' && <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">Lokacije trenutačno nisu dostupne. Pokušajte ponovno kasnije.</p>}
+          </div>}
         </div>
-
-        <div className="flex-1 relative">
-          <div className="absolute top-3 left-3 right-3 z-[999] grid grid-cols-3 gap-2 md:hidden">
-            <button onClick={findMyLocation} disabled={locating} className="min-w-0 rounded-xl bg-white px-2 py-3 text-center text-xs font-semibold text-slate-800 shadow-lg disabled:opacity-60" aria-label="Moja lokacija">
-              {locating ? 'Tražim…' : 'Moja lokacija'}
-            </button>
-            <button onClick={findNearestStop} disabled={locating} className="min-w-0 rounded-xl bg-white px-2 py-3 text-center text-xs font-semibold text-slate-800 shadow-lg disabled:opacity-60" aria-label="Moja najbliža stanica">
-              {locating ? 'Tražim…' : 'Najbliža stanica'}
-            </button>
-            <button onClick={() => setShowSchedule(true)} className="min-w-0 rounded-xl bg-slate-900 px-2 py-3 text-center text-xs font-semibold text-white shadow-lg">
-              Linije i polasci
-            </button>
-          </div>
-          <div className="absolute top-20 left-3 right-3 z-[999] md:hidden">
-            <FilterPanel
-              compact
-              vehicles={vehicles}
-              routes={routes}
-              selectedType={selectedType}
-              selectedLine={selectedLine}
-              onTypeChange={(type) => {
-                setSelectedType(type);
-                setSelectedLine('');
-              }}
-              onLineChange={setSelectedLine}
-            />
-          </div>
-          {locationMessage && <div className="absolute top-40 left-3 right-3 z-[999] rounded-lg bg-white/95 p-3 text-sm text-slate-700 shadow md:hidden" role="status">{locationMessage}</div>}
-          {selectedCity.status === 'active' ? (
-            <MapView
-              vehicles={filteredVehicles}
-              stops={showStops ? stops : []}
-              shapes={shapes}
-              center={mapCenter}
-              zoom={mapZoom}
-              userLocation={userLocation}
-              showStops={showStops}
-              showShapes={showShapes}
-              onVehicleClick={setSelectedVehicle}
-              onStopClick={(stop) => {
-                setNearestDistance(null);
-                setSelectedStop(stop);
-              }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-100">
-              <div className="text-center max-w-md p-8">
-                <div className="text-2xl font-bold text-gray-800 mb-2">
-                  {selectedCity.name}
-                </div>
-                <div className="text-gray-600 mb-4">
-                  Podaci uživo trenutno nisu dostupni za ovaj grad.
-                </div>
-                <div className="text-sm text-gray-500">
-                  Uskoro ćemo dodati podršku za više gradova.
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        {selectedCity.status === 'active' ? <MapView vehicles={filteredVehicles} stops={showStops ? stops : []} shapes={shapes} center={mapCenter} zoom={mapZoom} userLocation={userLocation} showStops={showStops} showShapes={showShapes} onVehicleClick={setSelectedVehicle} onStopClick={(stop) => { setNearestDistance(null); setSelectedStop(stop); }} /> : <div className="flex h-full w-full items-center justify-center bg-gray-100"><div className="max-w-md p-8 text-center"><div className="mb-2 text-2xl font-bold text-gray-800">{selectedCity.name}</div><div className="mb-4 text-gray-600">Podaci uživo trenutno nisu dostupni za ovaj grad.</div><div className="text-sm text-gray-500">Uskoro ćemo dodati podršku za više gradova.</div></div></div>}
       </div>
-
       {selectedVehicle && (
         <VehicleCard
           vehicle={selectedVehicle}
