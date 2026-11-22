@@ -54,6 +54,11 @@ export default function Header({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="truncate text-base font-bold tracking-tight sm:text-xl">Transitly</h1>
+              <label className="sr-only" htmlFor="transit-provider">Odaberi prijevoznika</label>
+              <select id="transit-provider" aria-label="Odaberi prijevoznika" defaultValue="zet" onChange={event => { if (event.target.value === 'hzpp') window.location.assign('/hzpp/'); }} className="min-h-8 max-w-[5.5rem] rounded-lg border border-white/20 bg-[#19364a] px-2 text-xs font-bold text-white outline-none hover:bg-[#25475d] focus-visible:ring-2 focus-visible:ring-[#a9f0d1]">
+                <option className="text-slate-900" value="zet">ZET</option>
+                <option className="text-slate-900" value="hzpp">HŽPP</option>
+              </select>
               <span className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold sm:inline-flex ${status.style}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />{status.label}
               </span>

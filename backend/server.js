@@ -901,6 +901,37 @@ app.get('/api/system/status', (req, res) => {
 
 // Frontend - statički serviranje
 const frontendDist = join(process.cwd(), 'dist');
+const hzppDist = join(frontendDist, 'hzpp');
+const hzppApiBase = 'https://prodaja.hzpp.hr/hzpp-sales-middleware-web';
+const hzppQueryKeys = ['lang', 'deviceType', 'clientUICOperatorCode', 'from', 'to', 'startTime', 'trainClass', 'benefit', 'countForBenefit', 'transportChanges'];
+async function proxyHzpp(req, res) {
+  const endpoint = req.path.endsWith('/stations') ? '/stations' : '/journeys-with-details/busInfo';
+  const query = new URLSearchParams();
+  for (const key of hzppQueryKeys) {
+    const value = req.query[key];
+    if (typeof value === 'string') query.set(key, value);
+  }
+  if (endpoint.includes('busInfo') && (!/^\d+$/.test(query.get('from') || '') || !/^\d+$/.test(query.get('to') || '') || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(query.get('startTime') || ''))) {
+    return res.status(400).json({ error: 'Neispravan zahtjev za polaske.' });
+  }
+  try {
+    const upstream = await fetch(`${hzppApiBase}${endpoint}?${query}`, {
+      headers: { 'X-device-type': 'PORTAL', deviceType: 'WEB', Language: query.get('lang') || 'hr' },
+      signal: AbortSignal.timeout(12000)
+    });
+    res.status(upstream.status).set('content-type', upstream.headers.get('content-type') || 'application/json').send(await upstream.text());
+  } catch {
+    res.status(502).json({ error: 'HŽPP trenutačno nije dostupan.' });
+  }
+}
+app.get('/hzpp-api/stations', apiLimiter, proxyHzpp);
+app.get('/hzpp-api/journeys-with-details/busInfo', apiLimiter, proxyHzpp);
+app.use('/hzpp', express.static(hzppDist));
+app.get('/hzpp/*', (req, res) => {
+  const indexPath = join(hzppDist, 'index.html');
+  if (!existsSync(indexPath)) return res.status(503).send('HŽPP prikaz nije izgrađen. Pokrenite npm run build.');
+  res.sendFile(indexPath);
+});
 app.use(express.static(frontendDist));
 app.get('/', (req, res) => {
   const indexPath = join(frontendDist, 'index.html');
