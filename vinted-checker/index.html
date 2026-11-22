@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vinted Listing Checker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Vinted Listing & Seller Checker</h1>
+      <p class="subtitle">Check listings and seller profiles for potential warning signs</p>
+    </header>
+
+    <div class="privacy-notice">
+      <strong>Privacy:</strong> All checks run in your browser. Nothing is uploaded, stored, or sent to any server.
+    </div>
+
+    <main>
+      <section class="input-section">
+        <h2>Listing Details</h2>
+
+        <div class="form-group">
+          <label for="listingText">Paste listing description:</label>
+          <textarea
+            id="listingText"
+            placeholder="Copy and paste the item description from Vinted..."
+            maxlength="10000"
+            rows="6"></textarea>
+          <small class="char-count"><span id="listingCount">0</span>/10,000 characters</small>
+        </div>
+
+        <div class="form-group">
+          <label for="messageText">Paste seller messages (optional):</label>
+          <textarea
+            id="messageText"
+            placeholder="If the seller has sent you messages, paste them here..."
+            maxlength="10000"
+            rows="4"></textarea>
+          <small class="char-count"><span id="messageCount">0</span>/10,000 characters</small>
+        </div>
+
+        <div class="form-group">
+          <label for="priceInput">Item price (optional):</label>
+          <input
+            type="text"
+            id="priceInput"
+            placeholder="e.g., €50 or 50"
+            maxlength="20">
+        </div>
+      </section>
+
+      <section class="input-section">
+        <h2>Seller Profile (Optional)</h2>
+        <p class="section-note">Enter details you can see on the seller's Vinted profile. Leave blank if unknown.</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="reviewCount">Number of reviews:</label>
+            <input
+              type="number"
+              id="reviewCount"
+              placeholder="e.g., 23"
+              min="0">
+          </div>
+
+          <div class="form-group">
+            <label for="rating">Average rating:</label>
+            <input
+              type="number"
+              id="rating"
+              placeholder="e.g., 4.8"
+              min="0"
+              max="5"
+              step="0.1">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="accountAge">Account age (optional):</label>
+            <input
+              type="text"
+              id="accountAge"
+              placeholder="e.g., Member since 2022"
+              maxlength="100">
+          </div>
+
+          <div class="form-group">
+            <label for="completedSales">Completed transactions:</label>
+            <input
+              type="number"
+              id="completedSales"
+              placeholder="e.g., 45"
+              min="0">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="reviewText">Review comments (optional):</label>
+          <textarea
+            id="reviewText"
+            placeholder="Paste a few recent reviews if you want to check for patterns..."
+            maxlength="5000"
+            rows="4"></textarea>
+          <small class="char-count"><span id="reviewTextCount">0</span>/5,000 characters</small>
+        </div>
+
+        <div class="form-group">
+          <label for="profileNotes">Profile notes (optional):</label>
+          <textarea
+            id="profileNotes"
+            placeholder="Any other profile details you noticed..."
+            maxlength="1000"
+            rows="2"></textarea>
+        </div>
+      </section>
+
+      <div class="button-group">
+        <button id="checkBtn" class="btn-primary">Check for Warning Signs</button>
+        <button id="clearBtn" class="btn-secondary">Clear All Data</button>
+      </div>
+
+      <div id="results" class="results hidden">
+        <h2>Results</h2>
+
+        <div id="overallSummary" class="summary-box"></div>
+
+        <div id="listingResults" class="result-section">
+          <h3>Listing & Message Analysis</h3>
+          <div id="listingWarnings"></div>
+        </div>
+
+        <div id="sellerResults" class="result-section">
+          <h3>Seller Profile Assessment</h3>
+          <div id="sellerWarnings"></div>
+        </div>
+
+        <div class="safety-reminder">
+          <h4>Safety Reminders</h4>
+          <ul>
+            <li>Keep all payment and communication on Vinted's platform</li>
+            <li>Never share passwords, verification codes, or full payment card details</li>
+            <li>Be cautious of external links, off-platform payment requests, and pressure to act quickly</li>
+            <li>Read seller reviews and check profile details carefully</li>
+            <li>If something seems suspicious, use Vinted's official reporting and help options</li>
+          </ul>
+        </div>
+
+        <div class="disclaimer">
+          <strong>Disclaimer:</strong> This tool does not access or verify Vinted accounts, listings, or reviews.
+          Seller details are entered by you. A positive result cannot guarantee a safe transaction.
+          Always use your judgment and Vinted's built-in safety features.
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <p><strong>Warning:</strong> Never paste passwords, payment details, or verification codes into this tool.</p>
+    </footer>
+  </div>
+
+  <script src="checker.js"></script>
+</body>
+</html>

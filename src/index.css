@@ -43,3 +43,27 @@ body {
   border-top-left-radius: 10px;
   background: rgba(255, 255, 255, 0.82) !important;
 }
+
+html[data-theme='dark'] body { background:#0b111a; color:#e2e8f0; }
+html[data-theme='dark'] #root { background:#0b111a; }
+html[data-theme='dark'] .bg-white { background-color:#17212d !important; }
+html[data-theme='dark'] .bg-gray-50, html[data-theme='dark'] .bg-slate-50,
+html[data-theme='dark'] [class*="bg-[#f3f7f6]"] { background-color:#111b27 !important; }
+html[data-theme='dark'] .bg-gray-100 { background-color:#202c39 !important; }
+html[data-theme='dark'] .bg-amber-50 { background-color:#382b16 !important; }
+html[data-theme='dark'] .bg-emerald-50 { background-color:#123226 !important; }
+html[data-theme='dark'] .bg-rose-50 { background-color:#3b2027 !important; }
+html[data-theme='dark'] .text-gray-900, html[data-theme='dark'] .text-gray-800,
+html[data-theme='dark'] .text-slate-900, html[data-theme='dark'] .text-slate-800,
+html[data-theme='dark'] .text-primary { color:#edf4fb !important; }
+html[data-theme='dark'] .text-gray-700, html[data-theme='dark'] .text-gray-600,
+html[data-theme='dark'] .text-gray-500, html[data-theme='dark'] .text-slate-700,
+html[data-theme='dark'] .text-slate-600, html[data-theme='dark'] .text-slate-500 { color:#b6c4d2 !important; }
+html[data-theme='dark'] .border-slate-200, html[data-theme='dark'] .border-slate-300,
+html[data-theme='dark'] .border-gray-200 { border-color:#344252 !important; }
+html[data-theme='dark'] input, html[data-theme='dark'] select, html[data-theme='dark'] textarea { color:#edf4fb; }
+html[data-theme='dark'] .leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(.88) contrast(.9); }
+html[data-theme='dark'] .leaflet-control-attribution { background:rgba(20,30,42,.88) !important; color:#cbd5e1 !important; }
+html[data-theme='dark'] .leaflet-control-attribution a { color:#7dd3fc !important; }
+html[data-theme='dark'] .leaflet-control-zoom a { background:#17212d !important; color:#e2e8f0 !important; border-color:#344252 !important; }
+html[data-theme='dark'] .leaflet-popup-content-wrapper, html[data-theme='dark'] .leaflet-popup-tip { background:#17212d; color:#e2e8f0; }

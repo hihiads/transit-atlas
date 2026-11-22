@@ -3,6 +3,7 @@ import AuthModal from '../../src/components/Auth/AuthModal';
 import CookieNotice from '../../src/components/CookieNotice';
 import { api, AuthStatus } from '../../src/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { applyTheme, readTheme } from '../../src/services/theme';
 
 function Icon({ name, size = 16 }: { name: 'swap' | 'clock' | 'locate' | 'login' | 'logout' | 'pin' | 'train' | 'wifi'; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -22,7 +23,8 @@ type ApiStation = { id: number; name: string };
 type GeoStation = { stop_id: string; stop_name: string; stop_lat: number; stop_lon: number };
 type Station = ApiStation & { lat?: number; lon?: number };
 type DelayInfo = { Delay?: number | null; Station?: string | null } | null;
-type TrainLeg = { Number?: string; Delay?: DelayInfo; Start?: { Name?: string }; Dest?: { Name?: string } };
+type TrainLeg = { Number?: string; DepartureDateTime?: string; Delay?: DelayInfo; Start?: { Name?: string }; Dest?: { Name?: string } };
+type StopDetail = { name: string; arrival: string | null; departure: string | null };
 type Journey = {
   DepartureDateTime: string;
   ArrivalDateTime: string;
@@ -75,10 +77,14 @@ export default function TransitlyHzpp() {
   const [now, setNow] = useState(Date.now());
   const [showAuth, setShowAuth] = useState(false);
   const [showSiteMenu, setShowSiteMenu] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => readTheme() === 'dark');
+  const [expandedJourney, setExpandedJourney] = useState<string | null>(null);
+  const [journeyDetails, setJourneyDetails] = useState<Record<string, { loading?: boolean; stops?: StopDetail[]; error?: string }>>({});
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ loginEnabled: true, registrationEnabled: true, authenticationActive: true });
   const requestId = useRef(0);
 
   useEffect(() => { api.getAuthStatus().then(setAuthStatus).catch(() => {}); }, []);
+  useEffect(() => { applyTheme(darkMode ? 'dark' : 'light'); }, [darkMode]);
 
   const from = stations.find(station => normalize(station.name) === normalize(fromName)) ?? null;
   const to = stations.find(station => normalize(station.name) === normalize(toName)) ?? null;
@@ -165,6 +171,28 @@ export default function TransitlyHzpp() {
 
   function swapStations() { setFromName(toName); setToName(fromName); }
 
+  async function toggleJourney(key: string, legs: TrainLeg[]) {
+    if (expandedJourney === key) { setExpandedJourney(null); return; }
+    setExpandedJourney(key);
+    const date = search?.date;
+    if (!date) return;
+    for (const [index, leg] of legs.entries()) {
+      const detailKey = `${key}:${index}`;
+      if (journeyDetails[detailKey]?.stops || journeyDetails[detailKey]?.loading) continue;
+      setJourneyDetails(current => ({ ...current, [detailKey]: { loading: true } }));
+      try {
+        const params = new URLSearchParams({ number: String(leg.Number || ''), start: String(leg.Start?.Name || ''), end: String(leg.Dest?.Name || ''), date, departure: time(leg.DepartureDateTime) });
+        const response = await fetch(`${HZPP}/journey-stops?${params}`);
+        if (!response.ok) throw new Error('Vozni red stanica trenutačno nije dostupan.');
+        const data = await response.json();
+        const stops = data.journeys?.[0]?.stops as StopDetail[] | undefined;
+        setJourneyDetails(current => ({ ...current, [detailKey]: stops?.length ? { stops } : { error: 'Popis stanica nije dostupan za ovaj vlak i datum.' } }));
+      } catch (error) {
+        setJourneyDetails(current => ({ ...current, [detailKey]: { error: error instanceof Error ? error.message : 'Ne mogu učitati stanice.' } }));
+      }
+    }
+  }
+
   return <main className="app-shell">
     <header className="topbar">
       <div className="brand-group"><a className="brand" href="/" aria-label="Transitly početna stranica"><span className="brand-icon"><Icon name="train" size={21} /></span><span>transitly<span className="brand-muted">.eu</span><small>HŽPP vlakovi</small></span></a><label className="sr-only" htmlFor="hzpp-provider">Odaberi prijevoznika</label><select id="hzpp-provider" aria-label="Odaberi prijevoznika" value="hzpp" onChange={event => { if (event.target.value === 'zet') window.location.assign('/'); }}><option value="zet">ZET</option><option value="hzpp">HŽPP</option></select></div>
@@ -173,6 +201,7 @@ export default function TransitlyHzpp() {
         <div className="site-menu-wrap">
           <button className="top-action menu-button" type="button" aria-expanded={showSiteMenu} aria-controls="hzpp-site-menu" onClick={() => setShowSiteMenu(open => !open)}>Izbornik <span aria-hidden="true">☰</span></button>
           {showSiteMenu && <nav id="hzpp-site-menu" className="site-menu" aria-label="Informacije o Transitlyju">
+            <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)}>{darkMode ? '☀️ Svijetli način rada' : '🌙 Tamni način rada'}</button>
             <a href="/privacy">Privatnost</a><a href="/terms">Uvjeti korištenja</a><a href="/cookies">Kolačići</a><a href={`mailto:${email}`}>Kontakt i prijava greške</a>
             <p>Transitly vodi <strong>Din Mulajusufović</strong></p>
           </nav>}
@@ -216,11 +245,26 @@ export default function TransitlyHzpp() {
             const live = delay > 0;
             const delayedLeg = legs.find(leg => leg.Delay?.Delay === delay);
             const wait = minutesUntil(journey.DepartureDateTime);
-            return <article className={`departure-card ${index === 0 ? 'next-card' : ''}`} key={`${legs.map(leg => leg.Number).join('-')}-${journey.DepartureDateTime}`}>
+            const journeyKey = `${legs.map(leg => leg.Number).join('-')}-${journey.DepartureDateTime}`;
+            const isExpanded = expandedJourney === journeyKey;
+            return <article className={`departure-card ${index === 0 ? 'next-card' : ''}`} key={journeyKey}>
               <div className="departure-times"><strong>{time(journey.DepartureDateTime)}</strong><span className="duration-line" /><strong>{time(journey.ArrivalDateTime)}</strong></div>
               <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} /> Vlak {legs.map(leg => leg.Number).filter(Boolean).join(' → ') || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? `Kasni ${delay} min` : 'Po rasporedu'}</span></div>
               {legs.length > 1 && <div className="transfer-legs">{legs.map((leg, legIndex) => <span key={`${leg.Number}-${legIndex}`}>{leg.Start?.Name} → {leg.Dest?.Name}</span>)}</div>}
               <div className="card-footer"><span><Icon name="clock" size={13} /> {wait === 0 ? 'Uskoro polazi' : `Za ${wait} min`}</span>{live && delayedLeg?.Delay?.Station && <span>Zadnja prijava: {delayedLeg.Delay.Station}</span>}</div>
+              <button className="details-toggle" type="button" aria-expanded={isExpanded} onClick={() => void toggleJourney(journeyKey, legs)}>{isExpanded ? 'Sakrij stanice' : 'Prikaži stanice i vremena'}</button>
+              {isExpanded && <div className="stop-details" aria-live="polite">
+                {legs.map((leg, legIndex) => {
+                  const detail = journeyDetails[`${journeyKey}:${legIndex}`];
+                  return <section className="leg-stops" key={`${leg.Number}-${legIndex}`}>
+                    {legs.length > 1 && <h3>Vlak {leg.Number}: {leg.Start?.Name} → {leg.Dest?.Name}</h3>}
+                    {detail?.loading && <p>Učitavam stanice…</p>}
+                    {detail?.error && <p role="status">{detail.error}</p>}
+                    {detail?.stops?.map((stop, stopIndex) => <div className="stop-row" key={`${stop.name}-${stopIndex}`}><span className="stop-dot" /><strong>{stop.name}</strong><span>{stopIndex === 0 ? 'Polazak' : 'Dolazak'} <b>{stopIndex === 0 ? stop.departure || stop.arrival || '—' : stop.arrival || stop.departure || '—'}</b></span>{stopIndex > 0 && stopIndex < detail.stops!.length - 1 && stop.departure && stop.departure !== stop.arrival && <span>Polazak <b>{stop.departure}</b></span>}</div>)}
+                  </section>;
+                })}
+                <small>Vremena su iz objavljenog voznog reda HŽPP-a.</small>
+              </div>}
             </article>;
           })}
         </div>

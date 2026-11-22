@@ -1,0 +1,14 @@
+{
+  "name": "Novčanik — osobne financije",
+  "short_name": "Novčanik",
+  "description": "Privatni planer osobnih financija",
+  "lang": "hr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f9f7",
+  "theme_color": "#317e68",
+  "icons": [
+    { "src": "/novcanik.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

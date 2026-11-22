@@ -11,6 +11,7 @@ import { useAuth } from './contexts/AuthContext';
 import { Vehicle, City, Route, Stop, TransitShape } from './types';
 import CookieNotice from './components/CookieNotice';
 import { readStoredStringList } from './services/localPreferences';
+import { applyTheme, readTheme } from './services/theme';
 
 function App() {
   const { user } = useAuth();
@@ -25,6 +26,7 @@ function App() {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
   const [showMapMenu, setShowMapMenu] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => readTheme() === 'dark');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataStatus, setDataStatus] = useState<'demo' | 'live' | 'unavailable'>('demo');
@@ -43,6 +45,8 @@ function App() {
   useEffect(() => {
     if (['/verify-email', '/reset-password'].includes(window.location.pathname)) setShowAuthModal(true);
   }, []);
+
+  useEffect(() => { applyTheme(darkMode ? 'dark' : 'light'); }, [darkMode]);
 
   const [selectedType, setSelectedType] = useState<'all' | 'bus' | 'tram'>('all');
   const [selectedLine, setSelectedLine] = useState<string>('');
@@ -313,6 +317,7 @@ function App() {
         menuOpen={showMapMenu}
         onMenuToggle={() => setShowMapMenu(!showMapMenu)}
         menuContent={<>
+          <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)} className="mb-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{darkMode ? '☀️ Svijetli način rada' : '🌙 Tamni način rada'}</button>
           <div className="grid grid-cols-1 gap-2">
             <button onClick={() => { findMyLocation(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? 'Tražim lokaciju…' : 'Moja lokacija'}</button>
             <button onClick={() => { findNearestStop(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? 'Tražim…' : 'Moja najbliža stanica'}</button>

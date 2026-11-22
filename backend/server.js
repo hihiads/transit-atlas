@@ -12,6 +12,7 @@ import { parse } from 'csv-parse/sync';
 import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
+import secondLookRoutes from './routes/secondlook.js';
 import { apiLimiter, asyncRoute, authLimiter, heavyLimiter } from './middleware/security.js';
 import { attachUser } from './middleware/auth.js';
 import { activateAuthentication, getAuthenticationSessionMiddleware } from './services/authRuntime.js';
@@ -104,6 +105,7 @@ let gtfsData = {
 const hzppData = { routes: [], stops: [], trips: [], stopTimes: [], stopTimesByStop: new Map(), stopTimeCount: 0, calendar: [], calendarDates: [] };
 let hzppLoaded = false;
 let hzppLastUpdate = null;
+let hzppLoadPromise = null;
 const beogradData = { routes: [], stops: [], trips: [], stopTimes: [], stopTimesByStop: new Map(), stopTimeCount: 0, calendar: [], calendarDates: [], shapes: [], agency: [] };
 let beogradLoaded = false;
 let beogradLastUpdate = null;
@@ -152,7 +154,13 @@ function parseGtfsCsv(csvText) {
   }
 }
 
-async function indexGtfsStopTimes(filePath, trips, stops) {
+function gtfsTimeSeconds(value) {
+  if (!value) return 0;
+  const [hour, minute, second] = String(value).split(':').map(Number);
+  return [hour, minute, second].every(Number.isFinite) ? hour * 3600 + minute * 60 + second : 0;
+}
+
+async function indexGtfsStopTimes(filePath, trips, stops, includeTripTimes = false) {
   const tripIndexes = new Map(trips.map((trip, index) => [String(trip.trip_id), index]));
   const stopIndexes = new Map(stops.map((stop, index) => [String(stop.stop_id), index]));
   const grouped = new Map();
@@ -173,7 +181,9 @@ async function indexGtfsStopTimes(filePath, trips, stops) {
     if (stopIndex !== undefined && row.stop_sequence !== '' && Number.isInteger(sequence) && sequence >= 0) {
       let entries = groupedByTrip.get(tripIndex);
       if (!entries) groupedByTrip.set(tripIndex, entries = []);
-      entries.push(stopIndex, sequence);
+      if (includeTripTimes) {
+        entries.push(stopIndex, sequence, gtfsTimeSeconds(row.arrival_time), gtfsTimeSeconds(row.departure_time));
+      } else entries.push(stopIndex, sequence);
     }
     if (!row.departure_time) continue;
     const [hour, minute, second] = String(row.departure_time).split(':').map(Number);
@@ -294,7 +304,7 @@ const gtfsFiles = {
 };
 const archiveLimit = 64 * 1024 * 1024;
 
-async function readStaticFeed(response, publishMetadata) {
+async function readStaticFeed(response, publishMetadata, includeTripTimes = false) {
   if (!response.ok) {
     response.body?.destroy();
     throw new Error(`HTTP ${response.status}`);
@@ -316,10 +326,11 @@ async function readStaticFeed(response, publishMetadata) {
     data.stopsById = new Map(data.stops.map(stop => [String(stop.stop_id), stop]));
     publishMetadata?.(data);
 
-    const indexed = await indexGtfsStopTimes(join(directory, 'stop_times.txt'), data.trips, data.stops);
+    const indexed = await indexGtfsStopTimes(join(directory, 'stop_times.txt'), data.trips, data.stops, includeTripTimes);
     if (!indexed.count) throw new Error('GTFS feed has no indexed departures');
     data.stopTimesByStop = indexed.byStop;
     data.stopTimesByTrip = indexed.byTrip;
+    data.stopTimesByTripStride = includeTripTimes ? 4 : 2;
     data.stopTimeCount = indexed.count;
     data.shapeResponse = await buildShapeResponse(data, join(directory, 'shapes.txt'));
     return data;
@@ -381,15 +392,24 @@ async function loadGtfsData() {
 }
 
 async function loadHzppData() {
+  if (hzppLoaded) return true;
+  if (hzppLoadPromise) return hzppLoadPromise;
   const url = new URL(process.env.HZPP_GTFS_URL || 'https://www.hzpp.hr/GTFS_files.zip');
-  try {
-    const response = await fetchFeed(url, { allowedOrigin: url.origin, maxBytes: archiveLimit, timeout: 60_000 });
-    Object.assign(hzppData, await readStaticFeed(response));
-    hzppLoaded = true;
-    hzppLastUpdate = new Date();
-  } catch (error) {
-    console.error('[HŽPP GTFS] Refresh failed:', error.name);
-  }
+  hzppLoadPromise = (async () => {
+    try {
+      const response = await fetchFeed(url, { allowedOrigin: url.origin, maxBytes: archiveLimit, timeout: 60_000 });
+      Object.assign(hzppData, await readStaticFeed(response, undefined, true));
+      hzppLoaded = true;
+      hzppLastUpdate = new Date();
+      return true;
+    } catch (error) {
+      console.error('[HŽPP GTFS] Refresh failed:', error.name);
+      return false;
+    } finally {
+      hzppLoadPromise = null;
+    }
+  })();
+  return hzppLoadPromise;
 }
 
 async function loadBeogradData() {
@@ -545,6 +565,7 @@ async function fetchRealtimeVehiclesFromZet() {
 
 // Autentifikacija
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api', apiLimiter, secondLookRoutes);
 
 // Opći API rate limiter
 app.use('/api', apiLimiter);
@@ -871,6 +892,54 @@ app.get('/api/:cityId/stop/:stopId/departures', asyncRoute(async (req, res) => {
         : 'Prikazan je službeni vozni red.'
   });
 }));
+
+app.get('/hzpp-api/journey-stops', async (req, res) => {
+  const { number, start, end, date, departure } = req.query;
+  if (typeof number !== 'string' || typeof start !== 'string' || typeof end !== 'string' || typeof date !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'Neispravan zahtjev za detalje vlaka.' });
+  }
+  if (!hzppLoaded && !await loadHzppData()) return res.status(502).json({ error: 'Vozni red HŽPP-a trenutačno nije dostupan.' });
+  const norm = value => String(value || '').toLocaleLowerCase('hr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\bkol\.?(?=\s|$)/g, 'kolodvor').replace(/\s+/g, ' ').trim();
+  const [year, month, day] = date.split('-').map(Number);
+  const weekday = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  const ymd = `${year}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`;
+  const services = new Set(hzppData.calendar.filter(row => ymd >= String(row.start_date) && ymd <= String(row.end_date) && String(row[weekday]) === '1').map(row => String(row.service_id)));
+  for (const row of hzppData.calendarDates.filter(item => String(item.date) === ymd)) {
+    if (String(row.exception_type) === '1') services.add(String(row.service_id)); else services.delete(String(row.service_id));
+  }
+  const stops = hzppData.stops;
+  const stopName = stop => norm(stop.stop_name);
+  const matches = [];
+  for (let tripIndex = 0; tripIndex < hzppData.trips.length; tripIndex++) {
+    const trip = hzppData.trips[tripIndex];
+    if (String(trip.trip_short_name || trip.trip_id) !== number || !services.has(String(trip.service_id))) continue;
+    const values = hzppData.stopTimesByTrip?.get(String(trip.trip_id));
+    if (!values) continue;
+    const stride = hzppData.stopTimesByTripStride || 2;
+    const stopsOnTrip = [];
+    for (let i = 0; i + stride <= values.length; i += stride) {
+      const stop = stops[values[i]];
+      if (!stop) continue;
+      stopsOnTrip.push({ name: stop.stop_name, sequence: values[i + 1], arrival: stride === 4 ? values[i + 2] : 0, departure: stride === 4 ? values[i + 3] : 0 });
+    }
+    const fromIndex = stopsOnTrip.findIndex(stop => stopName({ stop_name: stop.name }) === norm(start));
+    const toIndex = stopsOnTrip.findIndex((stop, index) => index > fromIndex && stopName({ stop_name: stop.name }) === norm(end));
+    if (fromIndex < 0 || toIndex < 0) continue;
+    const routeStops = stopsOnTrip.slice(fromIndex, toIndex + 1).map(stop => ({
+      name: stop.name,
+      arrival: stop.arrival ? `${String(Math.floor(stop.arrival / 3600)).padStart(2, '0')}:${String(Math.floor(stop.arrival % 3600 / 60)).padStart(2, '0')}` : null,
+      departure: stop.departure ? `${String(Math.floor(stop.departure / 3600)).padStart(2, '0')}:${String(Math.floor(stop.departure % 3600 / 60)).padStart(2, '0')}` : null
+    }));
+    const startDeparture = stopsOnTrip[fromIndex].departure;
+    const expected = typeof departure === 'string' && /^\d{2}:\d{2}$/.test(departure)
+      ? Number(departure.slice(0, 2)) * 3600 + Number(departure.slice(3)) * 60
+      : null;
+    matches.push({ stops: routeStops, distance: expected === null ? 0 : Math.abs(startDeparture - expected) });
+  }
+  matches.sort((a, b) => a.distance - b.distance);
+  res.json({ source: 'GTFS raspored', journeys: matches.slice(0, 1).map(({ stops }) => ({ stops })) });
+});
 
 // Status sistema
 app.get('/api/system/status', (req, res) => {
