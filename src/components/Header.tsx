@@ -30,6 +30,11 @@ export default function Header({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
+  const openDeleteDialog = () => {
+    setDeleteError('');
+    setShowDelete(true);
+  };
+
   const status = dataStatus === 'live'
     ? { label: 'Uživo', style: 'bg-emerald-400/15 text-emerald-200', dot: 'bg-emerald-400' }
     : dataStatus === 'demo'
@@ -38,7 +43,7 @@ export default function Header({
 
   return (
     <header className="relative z-[1001] border-b border-white/10 bg-[#102638] text-white shadow-[0_8px_28px_rgba(15,35,50,0.18)]">
-      <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-2 px-3 py-1.5 sm:gap-3 sm:px-5 sm:py-3.5">
+      <div className="mx-auto grid max-w-[1800px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-3 py-1.5 sm:flex sm:justify-between sm:gap-3 sm:px-5 sm:py-3.5">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#a9f0d1] text-[#102638] shadow-inner shadow-white/30 sm:h-10 sm:w-10 sm:rounded-2xl">
             <svg className="h-5 w-5 sm:h-6 sm:w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -55,25 +60,29 @@ export default function Header({
             </div>
             <p className="hidden text-xs text-slate-300 md:block">Linije i polasci javnog prijevoza</p>
           </div>
-          <div className="relative">
+          <div className="shrink-0 sm:relative">
             <button type="button" aria-expanded={menuOpen} aria-controls="site-menu" onClick={onMenuToggle} className="flex min-h-10 items-center gap-1.5 rounded-xl border border-white/15 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-white/10 sm:gap-2 sm:px-3 sm:text-sm">
               <span aria-hidden="true" className="text-base leading-none">☰</span><span>Izbornik</span>
             </button>
-            {menuOpen && <div id="site-menu" className="fixed left-3 right-3 top-[5.5rem] z-[1200] max-h-[min(75vh,38rem)] overflow-y-auto rounded-2xl border border-white/70 bg-[#f3f7f6]/95 p-3 text-slate-800 shadow-2xl backdrop-blur sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-2 sm:w-[21rem] sm:p-4">
+            {menuOpen && <div id="site-menu" className="absolute left-3 right-3 top-full z-[1200] mt-1 max-h-[min(75dvh,38rem)] overflow-y-auto rounded-2xl border border-white/70 bg-[#f3f7f6]/95 p-3 text-slate-800 shadow-2xl backdrop-blur sm:left-0 sm:right-auto sm:mt-2 sm:w-[21rem] sm:p-4">
               {menuContent}
+              {user && <button type="button" onClick={() => { onMenuToggle(); openDeleteDialog(); }} className="mt-2 min-h-10 rounded-lg px-2 text-sm font-semibold text-red-800 underline underline-offset-2 hover:bg-white sm:hidden">Obriši račun</button>}
             </div>}
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <div className="rounded-xl border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-right sm:px-3">
-            <div className="text-sm font-bold leading-4 tabular-nums">{vehicleCount}<span className="font-normal text-slate-300"> / {totalVehicles}</span></div>
-            <div className="mt-0.5 text-[10px] uppercase tracking-wider text-slate-300">vozila</div>
-          </div>
+        <div className="col-start-1 row-start-2 flex items-center gap-1.5 sm:hidden">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold ${status.style}`}><span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />{status.label}</span>
+        </div>
+        <div className="col-start-2 row-start-2 flex items-baseline justify-end gap-1.5 text-right sm:ml-auto sm:block sm:rounded-xl sm:border sm:border-white/10 sm:bg-white/[0.06] sm:px-3 sm:py-1.5">
+          <div className="text-xs font-bold leading-4 tabular-nums sm:text-sm">{vehicleCount}<span className="font-normal text-slate-300"> / {totalVehicles}</span></div>
+          <div className="text-[10px] uppercase tracking-wider text-slate-300 sm:mt-0.5">vozila</div>
+        </div>
+        <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end">
           {user ? (
             <div className="flex items-center gap-2">
               <span className="hidden max-w-[160px] truncate text-xs text-slate-300 lg:inline">{user.email}</span>
-              <button onClick={() => { setDeleteError(''); setShowDelete(true); }} className="rounded-xl border border-white/15 px-2.5 py-2 text-xs font-semibold underline underline-offset-2 transition hover:bg-white/10">Obriši račun</button>
+              <button onClick={openDeleteDialog} className="hidden rounded-xl border border-white/15 px-2.5 py-2 text-xs font-semibold underline underline-offset-2 transition hover:bg-white/10 sm:block">Obriši račun</button>
               <button onClick={logout} className="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold transition hover:bg-white/10 sm:text-sm">Odjava</button>
             </div>
           ) : (loginEnabled || registrationEnabled) ? (
@@ -82,9 +91,6 @@ export default function Header({
             </button>
           ) : null}
         </div>
-      </div>
-      <div className="flex items-center gap-1.5 px-3 pb-1.5 sm:hidden">
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold ${status.style}`}><span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />{status.label}</span>
       </div>
       {showDelete && <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" role="presentation">
         <section role="dialog" aria-modal="true" aria-labelledby="delete-account-title" aria-describedby="delete-account-description" onKeyDown={event => {

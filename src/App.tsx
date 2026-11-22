@@ -336,8 +336,7 @@ function App() {
           <FilterPanel vehicles={vehicles} routes={routes} selectedType={selectedType} selectedLine={selectedLine} onTypeChange={(type) => { setSelectedType(type); setSelectedLine(''); }} onLineChange={setSelectedLine} />
         </aside>
         <div className="relative min-h-0 flex-1">
-          <div className="absolute left-14 right-3 top-3 z-[999] md:hidden">
-            <p className="mb-2 w-fit rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-bold text-slate-700 shadow">Odaberi prijevoz i liniju</p>
+          <div className="absolute left-14 right-3 top-2 z-[999] md:hidden">
             <FilterPanel compact vehicles={vehicles} routes={routes} selectedType={selectedType} selectedLine={selectedLine} onTypeChange={(type) => { setSelectedType(type); setSelectedLine(''); }} onLineChange={setSelectedLine} />
           </div>
         {selectedCity.status === 'active' ? <MapView vehicles={filteredVehicles} stops={showStops ? stops : []} shapes={shapes} center={mapCenter} zoom={mapZoom} userLocation={userLocation} showStops={showStops} showShapes={showShapes} onVehicleClick={setSelectedVehicle} onStopClick={(stop) => { setNearestDistance(null); setSelectedStop(stop); }} /> : <div className="flex h-full w-full items-center justify-center bg-gray-100"><div className="max-w-md p-8 text-center"><div className="mb-2 text-2xl font-bold text-gray-800">{selectedCity.name}</div><div className="mb-4 text-gray-600">Podaci uživo trenutno nisu dostupni za ovaj grad.</div><div className="text-sm text-gray-500">Uskoro ćemo dodati podršku za više gradova.</div></div></div>}
