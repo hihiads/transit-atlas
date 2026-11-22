@@ -1,146 +1,100 @@
 import { useEffect, useState } from 'react';
-import { VehicleProfile } from '../types';
+import { Vehicle, VehicleProfile } from '../types';
 import { api } from '../api';
 
 interface VehicleProfileModalProps {
-  vehicleId: string;
+  vehicle: Vehicle;
   onClose: () => void;
 }
 
-export default function VehicleProfileModal({ vehicleId, onClose }: VehicleProfileModalProps) {
+const stopLabels = {
+  passed: 'Prošao',
+  current: 'Na stanici',
+  upcoming: 'Dolazi',
+  unknown: 'Status nije dostupan'
+};
+
+export default function VehicleProfileModal({ vehicle, onClose }: VehicleProfileModalProps) {
   const [profile, setProfile] = useState<VehicleProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    api.getVehicleProfile(vehicleId)
-      .then(setProfile)
-      .catch(() => setError('Nije moguće učitati profil vozila'))
-      .finally(() => setLoading(false));
-  }, [vehicleId]);
+    const controller = new AbortController();
+    let timer: number;
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-[2000] flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg p-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <div className="mt-4 text-gray-600">Učitavanje...</div>
-        </div>
-      </div>
-    );
-  }
+    async function refresh() {
+      try {
+        const updated = await api.getVehicleProfile(vehicle.id, controller.signal);
+        if (!controller.signal.aborted) {
+          setProfile(updated);
+          setError(false);
+        }
+      } catch {
+        if (!controller.signal.aborted) setError(true);
+      }
+      if (!controller.signal.aborted) timer = window.setTimeout(refresh, 15_000);
+    }
 
-  if (error || !profile) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-[2000] flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg p-8 max-w-md">
-          <div className="text-red-600 mb-4">{error || 'Greška'}</div>
-          <button
-            onClick={onClose}
-            className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-          >
-            Zatvori
-          </button>
-        </div>
-      </div>
-    );
-  }
+    void refresh();
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [vehicle.id]);
+
+  const details = profile ?? vehicle;
+  const typeLabel = details.type === 'bus' ? 'Autobus' : details.type === 'tram' ? 'Tramvaj' : 'Vozilo';
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[2000] flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg max-w-2xl w-full my-8">
-        <div className="p-6">
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <div className="text-xs text-gray-500 uppercase tracking-wide">
-                {profile.type === 'bus' ? 'Autobus' : 'Tramvaj'}
-              </div>
-              <div className="text-3xl font-bold text-primary">Linija {profile.line}</div>
-              <div className="text-gray-600">{profile.direction}</div>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-600 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+    <div className="fixed inset-0 z-[2000] flex items-end justify-center bg-slate-950/60 p-0 sm:items-center sm:p-4">
+      <section role="dialog" aria-modal="true" aria-labelledby="vehicle-profile-title"
+        onKeyDown={event => {
+          if (event.key === 'Escape') onClose();
+          if (event.key === 'Tab') {
+            event.preventDefault();
+            const button = event.currentTarget.querySelector('button');
+            const list = event.currentTarget.querySelector('ol');
+            (event.target === button && list ? list : button)?.focus();
+          }
+        }}
+        className="flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white text-slate-900 shadow-xl sm:rounded-2xl">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div>
+            <p className="text-sm text-slate-600">{typeLabel}{details.garageNumber && ` · ${details.garageNumber}`}</p>
+            <h2 id="vehicle-profile-title" className="text-xl font-bold">Linija {details.line}</h2>
+            <p className="text-sm text-slate-600">{details.direction}</p>
           </div>
+          <button type="button" autoFocus onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium">
+            Zatvori
+          </button>
+        </header>
 
-          <div className="space-y-6">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-lg mb-3">Osnovni podaci</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-gray-500">Garažni broj</div>
-                  <div className="font-medium">{profile.garageNumber || 'Nije dostupno'}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-500">Model</div>
-                  <div className="font-medium">{profile.model || 'Nije dostupno'}</div>
-                </div>
-                {profile.details?.manufacturer && (
-                  <div>
-                    <div className="text-sm text-gray-500">Proizvođač</div>
-                    <div className="font-medium">{profile.details.manufacturer}</div>
+        <div className="min-h-0 overflow-y-auto px-5 py-4">
+          <h3 className="mb-3 text-base font-semibold">Stanice na ovoj vožnji</h3>
+          {error && <p role="status" className="mb-3 text-sm text-slate-600">
+            {profile ? 'Osvježavanje nije uspjelo. Prikazani su zadnji dostupni podaci.' : 'Stanice trenutačno nije moguće učitati.'}
+          </p>}
+          {!profile && !error && <p role="status" className="text-sm text-slate-600">Učitavanje stanica…</p>}
+          {profile && profile.stops.length === 0 && <p className="text-sm text-slate-600">Vozni red za ovu vožnju nije dostupan.</p>}
+          {profile?.progressSource === 'estimated' && <p className="mb-3 text-xs text-slate-600">Prolazak kroz stanice procijenjen je prema GPS položaju vozila.</p>}
+          {profile && profile.stops.length > 0 && (
+            <ol tabIndex={0} aria-label="Redoslijed stanica"
+              className="outline-offset-2">
+              {profile.stops.map(stop => (
+                <li key={JSON.stringify([stop.sequence, stop.id])}
+                  className={`relative flex min-h-11 items-start gap-3 pl-7 last:after:hidden after:absolute after:-bottom-2 after:left-[7px] after:top-3 after:w-0.5 after:bg-slate-300 ${stop.status === 'passed' ? 'text-slate-500' : 'text-slate-900'}`}
+                  aria-current={stop.status === 'current' ? 'step' : undefined}>
+                  <span aria-hidden="true" className={`absolute left-0 top-1 z-10 size-4 rounded-full border-2 ${stop.status === 'passed' || stop.status === 'unknown' ? 'border-slate-400 bg-slate-100' : 'border-teal-700 bg-white'} ${stop.status === 'current' ? 'ring-2 ring-teal-200' : ''}`} />
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 pb-3">
+                    <span className="font-medium">{stop.name}</span>
+                    <span className={`text-xs ${stop.status === 'upcoming' || stop.status === 'current' ? 'font-semibold text-teal-800' : 'text-slate-500'}`}>{stopLabels[stop.status]}</span>
                   </div>
-                )}
-                {profile.details?.modelYear && (
-                  <div>
-                    <div className="text-sm text-gray-500">Godina modela</div>
-                    <div className="font-medium">{profile.details.modelYear}</div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {profile.details?.features && (
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h3 className="font-semibold text-lg mb-3">Značajke</h3>
-                <div className="space-y-2">
-                  {profile.details.features.lowFloor !== undefined && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-700">Niskopodni pristup</span>
-                      {profile.details.features.lowFloor ? (
-                        <span className="text-green-600 font-medium">Da</span>
-                      ) : (
-                        <span className="text-gray-600">Ne</span>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-700">Klimatizacija</span>
-                    <span className="text-gray-600">{profile.details.features.airConditioning || 'Podatak nije dostupan'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-700">WiFi</span>
-                    <span className="text-gray-600">{profile.details.features.wifi || 'Podatak nije dostupan'}</span>
-                  </div>
-                  {profile.details.capacity && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-700">Kapacitet</span>
-                      <span className="text-gray-600">{profile.details.capacity}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="border-t pt-4">
-              <div className="text-xs text-gray-500 mb-2">Izvor podataka</div>
-              <div className="text-sm text-gray-600 bg-gray-100 rounded px-3 py-2">
-                {profile.dataSource}
-              </div>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-              <strong>Napomena:</strong> Prikazani podaci su ogledni. U stvarnoj verziji aplikacije
-              ovdje bi bili prikazani provjereni podaci iz službenih izvora.
-            </div>
-          </div>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

@@ -152,9 +152,11 @@ function parseGtfsCsv(csvText) {
   }
 }
 
-async function indexGtfsStopTimes(filePath, trips) {
+async function indexGtfsStopTimes(filePath, trips, stops) {
   const tripIndexes = new Map(trips.map((trip, index) => [String(trip.trip_id), index]));
+  const stopIndexes = new Map(stops.map((stop, index) => [String(stop.stop_id), index]));
   const grouped = new Map();
+  const groupedByTrip = new Map();
   let count = 0;
   const parser = createReadStream(filePath).pipe(parseStream({
     columns: true,
@@ -165,7 +167,15 @@ async function indexGtfsStopTimes(filePath, trips) {
 
   for await (const row of parser) {
     const tripIndex = tripIndexes.get(String(row.trip_id));
-    if (tripIndex === undefined || !row.stop_id || !row.departure_time) continue;
+    if (tripIndex === undefined || !row.stop_id) continue;
+    const stopIndex = stopIndexes.get(String(row.stop_id));
+    const sequence = Number(row.stop_sequence);
+    if (stopIndex !== undefined && row.stop_sequence !== '' && Number.isInteger(sequence) && sequence >= 0) {
+      let entries = groupedByTrip.get(tripIndex);
+      if (!entries) groupedByTrip.set(tripIndex, entries = []);
+      entries.push(stopIndex, sequence);
+    }
+    if (!row.departure_time) continue;
     const [hour, minute, second] = String(row.departure_time).split(':').map(Number);
     if (![hour, minute, second].every(Number.isFinite)) continue;
     let entries = grouped.get(String(row.stop_id));
@@ -177,6 +187,9 @@ async function indexGtfsStopTimes(filePath, trips) {
 
   return {
     byStop: new Map([...grouped].map(([stopId, entries]) => [stopId, Uint32Array.from(entries)])),
+    byTrip: new Map([...groupedByTrip].map(([index, entries]) => [
+      String(trips[index].trip_id), Uint32Array.from(entries)
+    ])),
     count
   };
 }
@@ -295,11 +308,12 @@ async function readStaticFeed(response) {
       const path = join(directory, file);
       data[key] = existsSync(path) ? parseGtfsCsv(readFileSync(path, 'utf8')) : [];
     }
-    const indexed = await indexGtfsStopTimes(join(directory, 'stop_times.txt'), data.trips);
+    const indexed = await indexGtfsStopTimes(join(directory, 'stop_times.txt'), data.trips, data.stops);
     if (!data.routes.length || !data.stops.length || !data.trips.length || !indexed.count) {
       throw new Error('GTFS feed is missing required transit records');
     }
     data.stopTimesByStop = indexed.byStop;
+    data.stopTimesByTrip = indexed.byTrip;
     data.stopTimeCount = indexed.count;
     data.tripsById = new Map(data.trips.map(trip => [String(trip.trip_id), trip]));
     data.routesById = new Map(data.routes.map(route => [String(route.route_id), route]));
@@ -497,8 +511,9 @@ async function fetchRealtimeVehiclesFromZet() {
           lastUpdate,
           garageNumber: vehicle.vehicle?.label || null,
           registrationNumber: vehicle.vehicle?.licensePlate || null,
-          currentStopSequence: vehicle.currentStopSequence ?? null,
-          currentStatus: vehicle.currentStatus || null,
+          currentStopSequence: Object.hasOwn(vehicle, 'currentStopSequence') ? vehicle.currentStopSequence : null,
+          currentStatus: Object.hasOwn(vehicle, 'currentStatus') ? vehicle.currentStatus : null,
+          currentStopId: vehicle.stopId || null,
           speed: pos.speed == null ? null : Number(pos.speed),
           tripId: vehicle.trip?.tripId || null,
           routeId: vehicle.trip?.routeId || null,
@@ -655,6 +670,71 @@ app.get('/api/vehicles/:cityId', asyncRoute(async (req, res) => {
     staleVehiclesDropped: realtime.staleVehiclesDropped,
     lastUpdate: Date.now(),
     source: 'gtfs-realtime'
+  });
+}));
+
+function estimateNextStop(stops, vehicle) {
+  const metersPerLongitude = 111_320 * Math.cos(vehicle.lat * Math.PI / 180);
+  const points = stops.map(stop => ({
+    x: (stop.lon - vehicle.lon) * metersPerLongitude,
+    y: (stop.lat - vehicle.lat) * 111_320
+  }));
+  const candidates = [];
+  for (let index = 1; index < points.length; index++) {
+    const start = points[index - 1];
+    const end = points[index];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy);
+    if (!Number.isFinite(length) || length === 0) continue;
+    const fraction = Math.max(0, Math.min(1, -(start.x * dx + start.y * dy) / (length * length)));
+    const distance = Math.hypot(start.x + fraction * dx, start.y + fraction * dy);
+    const nextIndex = Math.hypot(start.x, start.y) <= 35 ? index - 1 : index;
+    candidates.push({ distance, nextIndex });
+  }
+  candidates.sort((a, b) => a.distance - b.distance);
+  const closest = candidates[0];
+  if (!closest || closest.distance > 180) return null;
+  const plausible = candidates.filter(item => item.distance <= closest.distance + 25);
+  const earliest = Math.min(...plausible.map(item => item.nextIndex));
+  const latest = Math.max(...plausible.map(item => item.nextIndex));
+  return latest - earliest > 1 ? null : stops[earliest].sequence;
+}
+
+app.get('/api/vehicle/:vehicleId', asyncRoute(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const realtime = await fetchRealtimeVehicles();
+  if (!realtime) return res.status(503).json({ error: 'Podaci uživo trenutačno nisu dostupni.' });
+  const vehicle = realtime.vehicles.find(item => item.id === req.params.vehicleId);
+  if (!vehicle) return res.status(404).json({ error: 'Vozilo više nije u podacima uživo.' });
+
+  const entries = gtfsData.stopTimesByTrip?.get(String(vehicle.tripId ?? '').trim()) ?? [];
+  const stops = [];
+  for (let index = 0; index < entries.length; index += 2) {
+    const stop = gtfsData.stops[entries[index]];
+    stops.push({ id: String(stop.stop_id), name: stop.stop_name, sequence: entries[index + 1], lat: Number(stop.stop_lat), lon: Number(stop.stop_lon) });
+  }
+  stops.sort((a, b) => a.sequence - b.sequence);
+
+  let currentSequence = stops.some(stop => stop.sequence === vehicle.currentStopSequence)
+    ? vehicle.currentStopSequence : null;
+  if (currentSequence === null && vehicle.currentStopId) {
+    const matchingStops = stops.filter(stop => stop.id === vehicle.currentStopId);
+    if (matchingStops.length === 1) currentSequence = matchingStops[0].sequence;
+  }
+  const reportedSequence = currentSequence;
+  currentSequence ??= estimateNextStop(stops, vehicle);
+  const atStop = reportedSequence !== null &&
+    vehicle.currentStatus === GtfsRealtimeBindings.transit_realtime.VehiclePosition.VehicleStopStatus.STOPPED_AT;
+  res.json({
+    ...vehicle,
+    progressSource: reportedSequence !== null ? 'live' : currentSequence !== null ? 'estimated' : 'unavailable',
+    stops: stops.map(({ id, name, sequence }) => ({
+      id, name, sequence,
+      status: currentSequence === null ? 'unknown' :
+        sequence < currentSequence ? 'passed' :
+          atStop && sequence === currentSequence ? 'current' : 'upcoming'
+    }))
   });
 }));
 

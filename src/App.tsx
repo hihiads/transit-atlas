@@ -3,6 +3,7 @@ import MapView from './components/MapView';
 import Header from './components/Header';
 import FilterPanel from './components/FilterPanel';
 import VehicleCard from './components/VehicleCard';
+import VehicleProfileModal from './components/VehicleProfileModal';
 import SchedulePanel from './components/SchedulePanel';
 import AuthModal from './components/Auth/AuthModal';
 import { api, AuthStatus } from './api';
@@ -19,6 +20,7 @@ function App() {
   const [shapes, setShapes] = useState<TransitShape[]>([]);
   const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [profileVehicle, setProfileVehicle] = useState<Vehicle | null>(null);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
   const [showMapMenu, setShowMapMenu] = useState(false);
@@ -347,10 +349,13 @@ function App() {
           vehicle={selectedVehicle}
           onClose={() => setSelectedVehicle(null)}
           onViewProfile={() => {
-            // Profil vozila - za sada samo zatvori
+            setProfileVehicle(selectedVehicle);
             setSelectedVehicle(null);
           }}
         />
+      )}
+      {profileVehicle && (
+        <VehicleProfileModal key={profileVehicle.id} vehicle={profileVehicle} onClose={() => setProfileVehicle(null)} />
       )}
 
       {selectedStop && (

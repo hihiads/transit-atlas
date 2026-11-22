@@ -11,7 +11,7 @@ export interface Vehicle {
   model?: string;
   lowFloor?: boolean;
   currentStopSequence?: number | null;
-  currentStatus?: string | null;
+  currentStatus?: number | null;
   tripId?: string | null;
   routeId?: string | null;
   source: 'demo' | 'gtfs' | 'realtime';
@@ -98,17 +98,13 @@ export interface StopDeparturesResponse {
 }
 
 export interface VehicleProfile extends Vehicle {
-  details?: {
-    manufacturer?: string;
-    modelYear?: string;
-    capacity?: string;
-    features: {
-      lowFloor?: boolean;
-      airConditioning?: string;
-      wifi?: string;
-    };
-  };
-  dataSource: string;
+  progressSource: 'live' | 'estimated' | 'unavailable';
+  stops: {
+    id: string;
+    name: string;
+    sequence: number;
+    status: 'passed' | 'current' | 'upcoming' | 'unknown';
+  }[];
 }
 
 export interface SystemStatus {

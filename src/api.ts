@@ -50,8 +50,8 @@ export const api = {
     return res.json();
   },
 
-  async getVehicleProfile(vehicleId: string): Promise<VehicleProfile> {
-    const res = await fetch(`${API_BASE}/vehicle/${vehicleId}`);
+  async getVehicleProfile(vehicleId: string, signal?: AbortSignal): Promise<VehicleProfile> {
+    const res = await fetch(`${API_BASE}/vehicle/${encodeURIComponent(vehicleId)}`, { signal });
     if (!res.ok) throw new Error('Failed to fetch vehicle profile');
     return res.json();
   },
