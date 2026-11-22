@@ -10,6 +10,7 @@ import { api, AuthStatus } from './api';
 import { useAuth } from './contexts/AuthContext';
 import { Vehicle, City, Route, Stop, TransitShape } from './types';
 import CookieNotice from './components/CookieNotice';
+import { readStoredStringList } from './services/localPreferences';
 
 function App() {
   const { user } = useAuth();
@@ -50,7 +51,7 @@ function App() {
     const checkTrackedDepartures = () => {
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
       if (!user) return;
-      const tracked: string[] = JSON.parse(localStorage.getItem(`transit-atlas-tracked:${user.id}`) || '[]');
+      const tracked = readStoredStringList(`transit-atlas-tracked:${user.id}`);
       const now = new Date();
       for (const item of tracked) {
         const time = item.split(':').slice(-3).join(':');

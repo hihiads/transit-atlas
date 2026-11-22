@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Route, Stop, Departure } from '../types';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import { readStoredStringList } from '../services/localPreferences';
 
 interface SchedulePanelProps {
   cityId: string;
@@ -28,9 +29,9 @@ export default function SchedulePanel({ cityId, initialStopId, onClose, onRequir
   const [departureMessage, setDepartureMessage] = useState('');
 
   useEffect(() => {
-    setTracked(user ? JSON.parse(localStorage.getItem(`transit-atlas-tracked:${user.id}`) || '[]') : []);
-    setFavoriteRoutes(user ? JSON.parse(localStorage.getItem(`transit-atlas-favorite-routes:${user.id}`) || '[]') : []);
-    setFavoriteStops(user ? JSON.parse(localStorage.getItem(`transit-atlas-favorite-stops:${user.id}`) || '[]') : []);
+    setTracked(user ? readStoredStringList(`transit-atlas-tracked:${user.id}`) : []);
+    setFavoriteRoutes(user ? readStoredStringList(`transit-atlas-favorite-routes:${user.id}`) : []);
+    setFavoriteStops(user ? readStoredStringList(`transit-atlas-favorite-stops:${user.id}`) : []);
   }, [user]);
 
   useEffect(() => {

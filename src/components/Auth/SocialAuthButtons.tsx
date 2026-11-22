@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createOAuthChallenge, finishOAuth, getOAuthProviders, RegistrationConsent, SignedInUser } from '../../services/auth';
+import { createOAuthChallenge, finishOAuth, getCurrentUser, getOAuthProviders, RegistrationConsent, SignedInUser } from '../../services/auth';
 
 declare global {
   interface Window {
@@ -66,7 +66,10 @@ export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSu
                 void refreshChallenge().catch(() => {});
                 return;
               }
-              await onSuccessRef.current(result.user);
+              setStatus('Prijava je potvrđena. Učitavam Transitly račun…');
+              const user = await getCurrentUser();
+              if (!user) throw new Error('Google je potvrdio račun, ali Transitly prijava nije dovršena. Pokušajte ponovno.');
+              await onSuccessRef.current({ id: user.id, email: user.email, emailVerified: user.emailVerified });
             } catch (cause) {
               setError(cause instanceof Error ? cause.message : 'Google prijava nije uspjela.');
               void refreshChallenge().catch(() => {});

@@ -1,8 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ArrowDownUp, Clock3, LocateFixed, LogIn, LogOut, MapPin, TrainFront, Wifi } from 'lucide-react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import AuthModal from '../../src/components/Auth/AuthModal';
 import { api, AuthStatus } from '../../src/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+
+function Icon({ name, size = 16 }: { name: 'swap' | 'clock' | 'locate' | 'login' | 'logout' | 'pin' | 'train' | 'wifi'; size?: number }) {
+  const paths: Record<string, ReactNode> = {
+    swap: <path d="m8 3-4 4 4 4M4 7h16m-4 14 4-4-4-4m4 4H4" />,
+    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    locate: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="2" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2" /></>,
+    login: <><path d="M10 17l5-5-5-5m5 5H3" /><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" /></>,
+    logout: <><path d="m14 17 5-5-5-5m5 5H9" /><path d="M12 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6" /></>,
+    pin: <><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2" /></>,
+    train: <><rect x="5" y="3" width="14" height="16" rx="3" /><path d="M8 7h8v5H8zm0 12-2 3m10-3 2 3M5 15h14" /></>,
+    wifi: <><path d="M5 12.5a10 10 0 0 1 14 0M8 15.5a6 6 0 0 1 8 0m-5 3a2 2 0 0 1 2 0" /></>
+  };
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
 
 type ApiStation = { id: number; name: string };
 type GeoStation = { stop_id: string; stop_name: string; stop_lat: number; stop_lon: number };
@@ -125,21 +138,21 @@ export default function TransitlyHzpp() {
 
   return <main className="app-shell">
     <header className="topbar">
-      <div className="brand-group"><a className="brand" href="/" aria-label="Transitly početna stranica"><span className="brand-icon"><TrainFront size={21} /></span><span>transitly<span className="brand-muted">.eu</span><small>HŽPP vlakovi</small></span></a><label className="sr-only" htmlFor="hzpp-provider">Odaberi prijevoznika</label><select id="hzpp-provider" aria-label="Odaberi prijevoznika" value="hzpp" onChange={event => { if (event.target.value === 'zet') window.location.assign('/'); }}><option value="zet">ZET</option><option value="hzpp">HŽPP</option></select></div>
+      <div className="brand-group"><a className="brand" href="/" aria-label="Transitly početna stranica"><span className="brand-icon"><Icon name="train" size={21} /></span><span>transitly<span className="brand-muted">.eu</span><small>HŽPP vlakovi</small></span></a><label className="sr-only" htmlFor="hzpp-provider">Odaberi prijevoznika</label><select id="hzpp-provider" aria-label="Odaberi prijevoznika" value="hzpp" onChange={event => { if (event.target.value === 'zet') window.location.assign('/'); }}><option value="zet">ZET</option><option value="hzpp">HŽPP</option></select></div>
       <div className="network-status"><span className="status-dot" /> HŽPP podaci <span className="status-divider">·</span> Zagreb i Hrvatska</div>
-      <div className="top-actions">{user ? <><span className="user-email">{user.email}</span><button className="top-action account-button" onClick={() => void logout().catch(() => setMessage('Odjava trenutačno nije uspjela.'))} aria-label="Odjavi se"><span>Odjava</span><LogOut size={15} /></button></> : authStatus.loginEnabled && <button className="top-action account-button" onClick={() => setShowAuth(true)}><span>Prijava</span><LogIn size={15} /></button>}<button className="top-action refresh-button" onClick={() => from && to && void loadJourneys(from, to)} aria-label="Osvježi polaske"><span>Osvježi</span><Wifi size={16} /></button></div>
+      <div className="top-actions">{user ? <><span className="user-email">{user.email}</span><button className="top-action account-button" onClick={() => void logout().catch(() => setMessage('Odjava trenutačno nije uspjela.'))} aria-label="Odjavi se"><span>Odjava</span><Icon name="logout" size={15} /></button></> : authStatus.loginEnabled && <button className="top-action account-button" onClick={() => setShowAuth(true)}><span>Prijava</span><Icon name="login" size={15} /></button>}<button className="top-action refresh-button" onClick={() => from && to && void loadJourneys(from, to)} aria-label="Osvježi polaske"><span>Osvježi</span><Icon name="wifi" size={16} /></button></div>
     </header>
 
     <div className="workspace">
       <aside className="side-panel">
-        <div className="panel-heading"><div><span className="eyebrow">PUTOVANJE VLAKOM</span><h1>Gdje ideš?</h1></div><div className="round-icon"><TrainFront size={19} /></div></div>
+        <div className="panel-heading"><div><span className="eyebrow">PUTOVANJE VLAKOM</span><h1>Gdje ideš?</h1></div><div className="round-icon"><Icon name="train" size={19} /></div></div>
         <div className="route-form">
           <label className="station-field"><span className="field-dot origin" /><span className="field-copy"><span>Polazna stanica</span><select aria-label="Polazna stanica" value={from?.id ?? ''} disabled={loadingStations} onChange={event => { setFrom(stations.find(station => station.id === Number(event.target.value)) ?? null); setNearby(null); }}><option value="">{loadingStations ? 'Učitavanje stanica…' : 'Odaberi stanicu'}</option>{stations.map(station => <option key={station.id} value={station.id}>{station.name}</option>)}</select></span></label>
-          <button className="swap-button" onClick={swapStations} aria-label="Zamijeni stanice"><ArrowDownUp size={16} /></button>
+          <button className="swap-button" onClick={swapStations} aria-label="Zamijeni stanice"><Icon name="swap" size={16} /></button>
           <label className="station-field"><span className="field-dot destination" /><span className="field-copy"><span>Odredišna stanica</span><select aria-label="Odredišna stanica" value={to?.id ?? ''} disabled={loadingStations} onChange={event => setTo(stations.find(station => station.id === Number(event.target.value)) ?? null)}><option value="">Odaberi stanicu</option>{stations.map(station => <option key={station.id} value={station.id}>{station.name}</option>)}</select></span></label>
         </div>
-        <button className="nearest-button" onClick={useNearestStation} disabled={locationBusy || loadingStations}><LocateFixed size={17} />{locationBusy ? 'Tražim stanicu…' : 'Pronađi najbližu stanicu'}</button>
-        {nearby && <div className="nearest-note"><MapPin size={14} /> Najbliža stanica: <strong>{nearby.name}</strong></div>}
+        <button className="nearest-button" onClick={useNearestStation} disabled={locationBusy || loadingStations}><Icon name="locate" size={17} />{locationBusy ? 'Tražim stanicu…' : 'Pronađi najbližu stanicu'}</button>
+        {nearby && <div className="nearest-note"><Icon name="pin" size={14} /> Najbliža stanica: <strong>{nearby.name}</strong></div>}
 
         <div className="departures-head"><div><span className="eyebrow">DANAŠNJI POLASCI</span><h2>{from?.name ?? 'Odaberi polazište'}</h2></div><span className="count-pill">{journeys.length}</span></div>
         <div className="route-summary"><span>{from?.name || 'Polazak'}</span><i /><span>{to?.name || 'Dolazak'}</span></div>
@@ -154,8 +167,8 @@ export default function TransitlyHzpp() {
             const wait = minutesUntil(journey.DepartureDateTime);
             return <article className={`departure-card ${index === 0 ? 'next-card' : ''}`} key={`${vehicle?.Number}-${journey.DepartureDateTime}`}>
               <div className="departure-times"><strong>{time(journey.DepartureDateTime)}</strong><span className="duration-line" /><strong>{time(journey.ArrivalDateTime)}</strong></div>
-              <div className="journey-meta"><span className="train-number"><TrainFront size={13} /> Vlak {vehicle?.Number || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? `Kasni ${delay} min` : 'Po rasporedu'}</span></div>
-              <div className="card-footer"><span><Clock3 size={13} /> {wait === 0 ? 'Uskoro polazi' : `Za ${wait} min`}</span>{live && vehicle?.Delay?.Station && <span>Zadnja prijava: {vehicle.Delay.Station}</span>}</div>
+              <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} /> Vlak {vehicle?.Number || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? `Kasni ${delay} min` : 'Po rasporedu'}</span></div>
+              <div className="card-footer"><span><Icon name="clock" size={13} /> {wait === 0 ? 'Uskoro polazi' : `Za ${wait} min`}</span>{live && vehicle?.Delay?.Station && <span>Zadnja prijava: {vehicle.Delay.Station}</span>}</div>
             </article>;
           })}
         </div>
