@@ -15,7 +15,7 @@ import { deleteUserSessions } from '../services/authRuntime.js';
 
 const router = express.Router();
 const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
-const TERMS_VERSION = '2026-11-22';
+const TERMS_VERSION = '2026-11-22-zet-hzpp';
 const registrationMessage = 'Ako se račun može otvoriti ili treba dodatnu potvrdu, provjerite email.';
 const verificationLifetime = 24 * 60 * 60 * 1000;
 
