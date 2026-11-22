@@ -1,5 +1,6 @@
 import { useAuth } from '../contexts/AuthContext';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 interface HeaderProps {
   vehicleCount: number;
@@ -8,6 +9,9 @@ interface HeaderProps {
   onAuthClick: () => void;
   loginEnabled: boolean;
   registrationEnabled: boolean;
+  menuOpen: boolean;
+  onMenuToggle: () => void;
+  menuContent: ReactNode;
 }
 
 export default function Header({
@@ -16,7 +20,10 @@ export default function Header({
   dataStatus,
   onAuthClick,
   loginEnabled,
-  registrationEnabled
+  registrationEnabled,
+  menuOpen,
+  onMenuToggle,
+  menuContent
 }: HeaderProps) {
   const { user, logout, deleteAccount } = useAuth();
   const [showDelete, setShowDelete] = useState(false);
@@ -48,6 +55,14 @@ export default function Header({
             </div>
             <p className="hidden text-xs text-slate-300 md:block">Linije i polasci javnog prijevoza</p>
           </div>
+          <div className="relative">
+            <button type="button" aria-expanded={menuOpen} aria-controls="site-menu" onClick={onMenuToggle} className="flex min-h-10 items-center gap-1.5 rounded-xl border border-white/15 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-white/10 sm:gap-2 sm:px-3 sm:text-sm">
+              <span aria-hidden="true" className="text-base leading-none">☰</span><span>Izbornik</span>
+            </button>
+            {menuOpen && <div id="site-menu" className="fixed left-3 right-3 top-[5.5rem] z-[1200] max-h-[min(75vh,38rem)] overflow-y-auto rounded-2xl border border-white/70 bg-[#f3f7f6]/95 p-3 text-slate-800 shadow-2xl backdrop-blur sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-2 sm:w-[21rem] sm:p-4">
+              {menuContent}
+            </div>}
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -71,13 +86,6 @@ export default function Header({
       <div className="flex items-center gap-1.5 px-3 pb-1.5 sm:hidden">
         <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold ${status.style}`}><span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />{status.label}</span>
       </div>
-      <nav aria-label="Pravne informacije" className="flex flex-nowrap gap-x-4 overflow-x-auto whitespace-nowrap px-4 pb-1.5 text-[10px] text-slate-200 sm:flex-wrap sm:overflow-visible sm:whitespace-normal sm:pb-2 sm:text-[11px]">
-        <a className="underline underline-offset-2 hover:text-white" href="/privacy">Privatnost</a>
-        <a className="underline underline-offset-2 hover:text-white" href="/terms">Uvjeti korištenja</a>
-        <a className="underline underline-offset-2 hover:text-white" href="/cookies">Kolačići</a>
-        <a className="underline underline-offset-2 hover:text-white" href="mailto:info@transitly.eu">Kontakt: info@transitly.eu</a>
-        <span className="hidden sm:inline">Transitly vodi Din Mulajusufović</span>
-      </nav>
       {showDelete && <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" role="presentation">
         <section role="dialog" aria-modal="true" aria-labelledby="delete-account-title" aria-describedby="delete-account-description" onKeyDown={event => {
           if (event.key === 'Escape' && !deleting) setShowDelete(false);
