@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://sitemaps.org">
   <url>
-    <loc>https://transitly.eu/</loc>
+    <loc>https://transitly.eu</loc>
     <lastmod>2026-11-23</lastmod>
   </url>
   <url>
-    <loc>https://transitly.eu/hzpp/</loc>
+    <loc>https://transitly.eu/hzpp</loc>
     <lastmod>2026-11-23</lastmod>
   </url>
 </urlset>
