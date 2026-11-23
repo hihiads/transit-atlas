@@ -102,6 +102,3 @@ html[data-theme='dark'] .transit-loader-page { background: #0b111a; }
 html[data-theme='dark'] .transit-loader__window { fill: #b7dfe5; }
 html[data-theme='dark'] .transit-loader__wheel { fill: #0b111a; stroke: #728697; }
 
-@media (prefers-reduced-motion: reduce) {
-  .transit-loader__vehicle { transform: translateX(0) !important; }
-}

@@ -21,16 +21,16 @@ export default function TransitLoadingAnimation({ mode, label, compact = false }
     if (!scene || !vehicle) return;
 
     const media = gsap.matchMedia();
-    media.add({ reduceMotion: '(prefers-reduced-motion: reduce)' }, ({ conditions }) => {
-      if (conditions?.reduceMotion) return;
+    media.add({ always: 'all', reduceMotion: '(prefers-reduced-motion: reduce)' }, ({ conditions }) => {
+      const reducedMotion = Boolean(conditions?.reduceMotion);
       gsap.fromTo(vehicle, { x: -104 }, {
         x: scene.clientWidth + 104,
-        duration: 2.8,
+        duration: reducedMotion ? 7 : 2.8,
         ease: 'none',
         repeat: -1,
       });
       if (trackRef.current) {
-        gsap.to(trackRef.current, { strokeDashoffset: -28, duration: 0.7, ease: 'none', repeat: -1 });
+        gsap.to(trackRef.current, { strokeDashoffset: -28, duration: reducedMotion ? 2.2 : 0.7, ease: 'none', repeat: -1 });
       }
     });
 
