@@ -201,9 +201,7 @@ export default function TransitlyHzpp() {
 
   return <main className="app-shell">
     <header className="topbar">
-      <div className="brand-group"><a className="brand" href="/" aria-label="Transitly početna stranica"><span className="brand-icon"><Icon name="train" size={21} /></span><span>transitly<span className="brand-muted">.eu</span><small>HŽPP vlakovi</small></span></a><label className="sr-only" htmlFor="hzpp-provider">Odaberi prijevoznika</label><select id="hzpp-provider" aria-label="Odaberi prijevoznika" value="hzpp" onChange={event => { if (event.target.value === 'zet') window.location.assign('/'); }}><option value="zet">ZET</option><option value="hzpp">HŽPP</option></select></div>
-      <div className="network-status"><span className="status-dot" /> HŽPP podaci <span className="status-divider">·</span> Zagreb i Hrvatska</div>
-      <div className="top-actions">
+      <div className="brand-group"><a className="brand" href="/" aria-label="Transitly početna stranica"><span className="brand-icon"><Icon name="train" size={21} /></span></a><label className="sr-only" htmlFor="hzpp-provider">Odaberi prijevoznika</label><select id="hzpp-provider" aria-label="Odaberi prijevoznika" value="hzpp" onChange={event => { if (event.target.value === 'zet') window.location.assign('/'); }}><option value="zet">ZET</option><option value="hzpp">HŽPP</option></select>
         <div className="site-menu-wrap">
           <button className="top-action menu-button" type="button" aria-expanded={showSiteMenu} aria-controls="hzpp-site-menu" onClick={() => setShowSiteMenu(open => !open)}>Izbornik <span aria-hidden="true">☰</span></button>
           {showSiteMenu && <nav id="hzpp-site-menu" className="site-menu" aria-label="Informacije o Transitlyju">
@@ -212,6 +210,9 @@ export default function TransitlyHzpp() {
             <p>Transitly vodi <strong>Din Mulajusufović</strong></p>
           </nav>}
         </div>
+      </div>
+      <div className="network-status"><span className="status-dot" /> HŽPP podaci <span className="status-divider">·</span> Zagreb i Hrvatska</div>
+      <div className="top-actions">
         {user ? <><span className="user-email">{user.email}</span><button className="top-action account-button" onClick={() => void logout().catch(() => setMessage('Odjava trenutačno nije uspjela.'))} aria-label="Odjavi se"><span>Odjava</span><Icon name="logout" size={15} /></button></> : authStatus.loginEnabled && <button className="top-action account-button" onClick={() => setShowAuth(true)}><span>Prijava</span><Icon name="login" size={15} /></button>}
         <button className="top-action refresh-button" onClick={() => search && void loadJourneys(search)} aria-label="Osvježi polaske"><span>Osvježi</span><Icon name="wifi" size={16} /></button>
       </div>

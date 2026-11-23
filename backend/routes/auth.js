@@ -139,6 +139,7 @@ router.post('/oauth/:provider',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Prijava nije uspjela. Pokušajte ponovno.' });
 
+    let failureStage = 'Google token verification';
     try {
       if (!getRuntimeSettings().googleEnabled) return res.status(403).json({ error: 'Ova prijava trenutačno nije dostupna.' });
       const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -152,13 +153,20 @@ router.post('/oauth/:provider',
       const claims = verified.payload;
       if (typeof claims.sub !== 'string' || !claims.sub || typeof claims.email !== 'string' ||
           (claims.email_verified !== true && claims.email_verified !== 'true')) {
+        console.warn('Google sign-in rejected:', { stage: 'token claims', reason: 'missing or unverified email' });
         return res.status(401).json({ error: 'Račun nije moguće potvrditi kod pružatelja prijave.' });
       }
 
+      failureStage = 'OAuth challenge validation';
       const existing = req.session.oauthChallenges?.[provider];
       const challenges = Array.isArray(existing) ? existing : existing ? [existing] : [];
       const challenge = challenges.find(item => item.nonce === claims.nonce && item.expires >= Date.now());
       if (!challenge || challenge.intent !== req.body.intent) {
+        console.warn('Google sign-in rejected:', {
+          stage: 'OAuth challenge validation',
+          reason: challenge ? 'intent mismatch' : 'nonce missing or expired',
+          challengeCount: challenges.length
+        });
         return res.status(401).json({ error: 'Prijava je istekla. Pokušajte ponovno.' });
       }
       req.session.oauthChallenges[provider] = challenges.filter(item => item.nonce !== challenge.nonce);
@@ -172,6 +180,7 @@ router.post('/oauth/:provider',
         return res.status(400).json({ error: 'Prihvatite uvjete i odaberite dobnu skupinu.' });
       }
 
+      failureStage = 'account lookup';
       const email = claims.email.toLowerCase();
       if (ageRange === '10-15' && guardianEmail === email) return res.status(400).json({ error: 'Za roditeljsku potvrdu unesite email koji se razlikuje od Google emaila.' });
       let user = await User.findOne({ googleSubject: claims.sub });
@@ -195,6 +204,7 @@ router.post('/oauth/:provider',
           return res.json(result);
         }
         if (ageRange !== '16+' || !termsAccepted) return res.status(400).json({ error: 'Registracija nije dovršena. Prihvatite uvjete i odaberite dobnu skupinu.' });
+        failureStage = 'account creation';
         user = await User.create({
           email,
           emailVerified: true,
@@ -210,6 +220,7 @@ router.post('/oauth/:provider',
         return res.json({ message: 'Račun je kreiran. Prijava trenutačno nije dostupna.' });
       }
 
+      failureStage = 'session creation';
       req.session.regenerate(error => {
         if (error) return res.status(500).json({ error: 'Prijava nije uspjela.' });
         req.session.userId = user._id.toString();
@@ -220,8 +231,16 @@ router.post('/oauth/:provider',
         });
       });
     } catch (error) {
-      console.error('Google sign-in failed:', error.name);
-      res.status(401).json({ error: 'Prijava nije uspjela. Pokušajte ponovno.' });
+      const invalidTokenCodes = new Set([
+        'ERR_JWT_EXPIRED', 'ERR_JWT_CLAIM_VALIDATION_FAILED', 'ERR_JWT_INVALID',
+        'ERR_JWT_NOT_YET_VALID', 'ERR_JWT_CLAIM_COMBINATION_FAILED', 'ERR_JWT_MISSING',
+        'ERR_JWS_INVALID', 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED', 'ERR_JOSE_ALG_NOT_ALLOWED'
+      ]);
+      const invalidToken = invalidTokenCodes.has(error.code);
+      console.error('Google sign-in failed:', { stage: failureStage, name: error.name, code: error.code });
+      res.status(invalidToken ? 401 : 503).json({
+        error: invalidToken ? 'Prijava nije uspjela. Pokušajte ponovno.' : 'Google prijava je privremeno nedostupna. Pokušajte ponovno.'
+      });
     }
   }
 );

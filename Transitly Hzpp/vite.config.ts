@@ -11,6 +11,10 @@ export default defineConfig({
     port: 4173,
     strictPort: true,
     proxy: {
+      '/hzpp-api/journey-stops': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
+      },
       '/hzpp-api': {
         target: 'https://prodaja.hzpp.hr',
         changeOrigin: true,
