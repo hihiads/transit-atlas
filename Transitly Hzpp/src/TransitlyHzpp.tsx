@@ -4,6 +4,9 @@ import CookieNotice from '../../src/components/CookieNotice';
 import { api, AuthStatus } from '../../src/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { applyTheme, readTheme } from '../../src/services/theme';
+import { API_ORIGIN } from '../../src/services/platform';
+import { getDevicePosition } from '../../src/services/deviceLocation';
+import TransitLoadingAnimation from '../../src/components/TransitLoadingAnimation';
 
 function Icon({ name, size = 16 }: { name: 'swap' | 'clock' | 'locate' | 'login' | 'logout' | 'pin' | 'train' | 'wifi'; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -31,7 +34,7 @@ type Journey = {
   TransportationsWithDelay?: { TransportationWithDelay?: TrainLeg[] };
 };
 
-const HZPP = '/hzpp-api';
+const HZPP = `${API_ORIGIN}/hzpp-api`;
 const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 const email = 'info@transitly.eu';
 
@@ -161,9 +164,8 @@ export default function TransitlyHzpp() {
   }
 
   function useNearestStation() {
-    if (!navigator.geolocation) { setMessage('Ovaj uređaj ne podržava lokaciju.'); return; }
     setLocationBusy(true);
-    navigator.geolocation.getCurrentPosition(({ coords }) => {
+    getDevicePosition(({ coords }) => {
       const nearest = stations.filter((station): station is Station & { lat: number; lon: number } => Number.isFinite(station.lat) && Number.isFinite(station.lon)).reduce<Station | null>((best, station) => {
         const distance = (station.lat - coords.latitude) ** 2 + (station.lon - coords.longitude) ** 2;
         if (!best) return station;
@@ -198,6 +200,8 @@ export default function TransitlyHzpp() {
       }
     }
   }
+
+  if (loadingStations) return <div className="transit-loader-page"><TransitLoadingAnimation mode="train" label="Učitavamo HŽPP stanice…" /></div>;
 
   return <main className="app-shell">
     <header className="topbar">
@@ -242,7 +246,7 @@ export default function TransitlyHzpp() {
         <div className="departures-head"><div><span className="eyebrow">POLASCI ZA ODABRANI DAN</span><h2>{search?.from.name ?? 'Odaberi relaciju'}</h2></div><span className="count-pill">{journeys.length}</span></div>
         <div className="route-summary"><span>{search?.from.name || 'Polazak'}</span><i /><span>{search?.to.name || 'Dolazak'}</span><span>{search ? `${displayDate(search.date)} · nakon ${search.time}` : ''}</span></div>
         <div className="departure-list" aria-live="polite">
-          {loadingJourneys && !journeys.length && <div className="empty-state"><span className="loader" />Tražim vlakove za odabranu relaciju i datum…</div>}
+          {loadingJourneys && <TransitLoadingAnimation mode="train" label="Vlak vozi dok tražimo polaske…" compact />}
           {!loadingJourneys && !journeys.length && !message && <div className="empty-state">Odaberi polaznu stanicu, odredište i datum pa potraži vlakove.</div>}
           {message && !journeys.length && <div className="empty-state error-state">{message}</div>}
           {journeys.map((journey, index) => {
@@ -266,7 +270,7 @@ export default function TransitlyHzpp() {
                   const detail = journeyDetails[`${journeyKey}:${legIndex}`];
                   return <section className="leg-stops" key={`${leg.Number}-${legIndex}`}>
                     {legs.length > 1 && <h3>Vlak {leg.Number}: {leg.Start?.Name} → {leg.Dest?.Name}</h3>}
-                    {detail?.loading && <p>Učitavam stanice…</p>}
+                    {detail?.loading && <TransitLoadingAnimation mode="train" label="Učitavam stanice vlaka…" compact />}
                     {detail?.error && <p role="status">{detail.error}</p>}
                     {detail?.stops?.map((stop, stopIndex) => <div className="stop-row" key={`${stop.name}-${stopIndex}`}><span className="stop-dot" /><strong>{stop.name}</strong><span>{stopIndex === 0 ? 'Polazak' : 'Dolazak'} <b>{stopIndex === 0 ? stop.departure || stop.arrival || '—' : stop.arrival || stop.departure || '—'}</b></span>{stopIndex > 0 && stopIndex < detail.stops!.length - 1 && stop.departure && stop.departure !== stop.arrival && <span>Polazak <b>{stop.departure}</b></span>}</div>)}
                   </section>;

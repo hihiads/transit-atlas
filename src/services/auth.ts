@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_URL || '';
+import { API_ORIGIN } from './platform';
+
+const API_BASE = API_ORIGIN;
 
 export interface OAuthProviders {
   google: boolean;

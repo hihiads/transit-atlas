@@ -22,7 +22,7 @@ services:
       - key: ADMIN_PANEL_PASSWORD
         sync: false
       - key: APP_ORIGIN
-        value: https://transit-atlas.onrender.com
+        value: https://transitly.eu,https://www.transitly.eu,https://transit-atlas.onrender.com,https://localhost,capacitor://localhost
       - key: TURNSTILE_SITE_KEY
         sync: false
       - key: TURNSTILE_SECRET_KEY

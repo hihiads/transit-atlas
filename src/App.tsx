@@ -12,6 +12,9 @@ import { Vehicle, City, Route, Stop, TransitShape } from './types';
 import CookieNotice from './components/CookieNotice';
 import { readStoredStringList } from './services/localPreferences';
 import { applyTheme, readTheme } from './services/theme';
+import { getDevicePosition } from './services/deviceLocation';
+import { isNativeApp } from './services/platform';
+import TransitLoadingAnimation from './components/TransitLoadingAnimation';
 
 function App() {
   const { user } = useAuth();
@@ -28,6 +31,7 @@ function App() {
   const [showMapMenu, setShowMapMenu] = useState(false);
   const [darkMode, setDarkMode] = useState(() => readTheme() === 'dark');
   const [loading, setLoading] = useState(true);
+  const [transitDataLoading, setTransitDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataStatus, setDataStatus] = useState<'demo' | 'live' | 'unavailable'>('demo');
   const [showStops, setShowStops] = useState(false);
@@ -53,16 +57,23 @@ function App() {
 
   useEffect(() => {
     const checkTrackedDepartures = () => {
+      if (isNativeApp()) return;
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
       if (!user) return;
       const tracked = readStoredStringList(`transit-atlas-tracked:${user.id}`);
       const now = new Date();
       for (const item of tracked) {
-        const time = item.split(':').slice(-3).join(':');
-        if (!/^\d{2}:\d{2}:\d{2}$/.test(time)) continue;
-        const [hour, minute] = time.split(':').map(Number);
-        const departure = new Date(now);
-        departure.setHours(hour, minute, 0, 0);
+        const match = item.match(/:(\d{2}:\d{2}:\d{2})(?::(\d{10,13}))?$/);
+        if (!match) continue;
+        const time = match[1];
+        const scheduledTimestamp = Number(match[2]);
+        const departure = Number.isFinite(scheduledTimestamp) && scheduledTimestamp > 0
+          ? new Date(scheduledTimestamp)
+          : new Date(now);
+        if (!scheduledTimestamp) {
+          const [hour, minute] = time.split(':').map(Number);
+          departure.setHours(hour, minute, 0, 0);
+        }
         const mins = Math.round((departure.getTime() - now.getTime()) / 60000);
         const moment = mins <= 10 && mins >= 0 ? 'soon' : mins < 0 && mins >= -1 ? 'now' : '';
         const key = `transit-notified:${now.toDateString()}:${item}:${moment}`;
@@ -86,8 +97,9 @@ function App() {
       .then(cities => {
         const activeCity = cities.find(c => c.status === 'active');
         if (activeCity) setSelectedCity(activeCity);
+        else setTransitDataLoading(false);
       })
-      .catch(() => setError('Nije moguće učitati popis gradova'))
+      .catch(() => { setError('Nije moguće učitati popis gradova'); setTransitDataLoading(false); })
       .finally(() => setLoading(false));
     return () => { window.clearInterval(interval); window.removeEventListener('focus', refreshAuthStatus); };
   }, []);
@@ -112,6 +124,7 @@ function App() {
       setStops([]);
       setShapes([]);
       setDataStatus('unavailable');
+      setTransitDataLoading(false);
       return;
     }
 
@@ -119,15 +132,19 @@ function App() {
     setShowShapes(false);
 
     // Učitaj vozila
+    setTransitDataLoading(true);
     api.getVehicles(selectedCity.id)
       .then(response => {
+        if (cancelled) return;
         setVehicles(response.vehicles);
         setDataStatus(response.status);
       })
       .catch(() => {
+        if (cancelled) return;
         setError('Nije moguće učitati podatke o vozilima');
         setVehicles([]);
-      });
+      })
+      .finally(() => { if (!cancelled) setTransitDataLoading(false); });
 
     let routeRetry: number | undefined;
     const scheduleRoutesRetry = () => {
@@ -203,12 +220,8 @@ function App() {
 
   function findMyLocation() {
     setLocationMessage('');
-    if (!navigator.geolocation) {
-      setLocationMessage('Ovaj uređaj ne može pronaći lokaciju.');
-      return;
-    }
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(({ coords }) => {
+    getDevicePosition(({ coords }) => {
       const location: [number, number] = [coords.latitude, coords.longitude];
       setUserLocation(location);
       setSelectedStop(null);
@@ -224,12 +237,8 @@ function App() {
 
   function findNearestStop() {
     setLocationMessage('');
-    if (!navigator.geolocation) {
-      setLocationMessage('Ovaj uređaj ne može pronaći lokaciju.');
-      return;
-    }
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(({ coords }) => {
+    getDevicePosition(({ coords }) => {
       const validStops = stops.filter(stop => Number.isFinite(stop.lat) && Number.isFinite(stop.lon) && Math.abs(stop.lat) <= 90 && Math.abs(stop.lon) <= 180);
       if (!validStops.length) {
         setLocationMessage('Stanice trenutačno nisu dostupne.');
@@ -273,16 +282,9 @@ function App() {
     setFilteredVehicles(filtered);
   }, [vehicles, selectedType, selectedLine]);
 
-  if (loading || authStatusLoading) {
+  if (loading || authStatusLoading || transitDataLoading) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#f3f7f6]">
-        <div className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#102638] text-[#a9f0d1] shadow-lg">
-            <svg className="h-7 w-7 animate-pulse" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 3.75h10A2.25 2.25 0 0 1 19.25 6v9A2.25 2.25 0 0 1 17 17.25H7A2.25 2.25 0 0 1 4.75 15V6A2.25 2.25 0 0 1 7 3.75Z" stroke="currentColor" strokeWidth="1.8"/><path d="M7.5 7h9v5h-9zM8 20l2-2.75m6 2.75L14 17.25" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>
-          </div>
-          <div className="text-sm font-medium text-slate-600">Učitavam kartu…</div>
-        </div>
-      </div>
+      <div className="transit-loader-page"><TransitLoadingAnimation mode="tram" label="Učitavam ZET i Transitly podatke…" /></div>
     );
   }
 

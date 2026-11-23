@@ -1,0 +1,107 @@
+.transit-loader {
+  --loader-muted: #587286;
+  --loader-bg: #edf5f7;
+  --loader-border: #d8e5eb;
+  --loader-track: #9aafbc;
+  --loader-marking: #edf5f7;
+  --loader-vehicle: #007f87;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 8px;
+  color: var(--loader-muted);
+  text-align: center;
+}
+
+.transit-loader__scene {
+  position: relative;
+  width: min(100%, 420px);
+  height: 82px;
+  overflow: hidden;
+  border: 1px solid var(--loader-border);
+  border-radius: 16px;
+  background: var(--loader-bg);
+}
+
+.transit-loader__scene--train { --loader-vehicle: #087f87; }
+.transit-loader__scene--bus { --loader-vehicle: #2672b8; }
+.transit-loader__scene--tram { --loader-vehicle: #c24848; }
+
+.transit-loader__track {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.transit-loader__rail {
+  fill: none;
+  stroke: var(--loader-track);
+  stroke-width: 2;
+}
+
+.transit-loader__sleepers {
+  fill: none;
+  stroke: var(--loader-track);
+  stroke-dasharray: 3 15;
+  stroke-linecap: round;
+  stroke-width: 7;
+}
+
+.transit-loader__road {
+  fill: none;
+  stroke: var(--loader-track);
+  stroke-width: 4;
+}
+
+.transit-loader__road-markings {
+  fill: none;
+  stroke: var(--loader-marking);
+  stroke-dasharray: 14 18;
+  stroke-width: 2;
+}
+
+.transit-loader__vehicle {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 100px;
+  height: 56px;
+  overflow: visible;
+}
+
+.transit-loader__body {
+  fill: var(--loader-vehicle);
+  stroke: #14515b;
+  stroke-width: 1.5;
+}
+
+.transit-loader__window { fill: #dff6fa; }
+.transit-loader__trim { fill: none; stroke: #e9f6f7; stroke-linecap: round; stroke-width: 2; }
+.transit-loader__wheel { fill: #203849; stroke: #dce8ed; stroke-width: 1.5; }
+.transit-loader__light { stroke: #ffe08b; stroke-linecap: round; stroke-width: 3; }
+.transit-loader__label { max-width: 100%; font-size: 13px; font-weight: 650; line-height: 1.4; }
+.transit-loader--compact { gap: 6px; padding: 4px 0; }
+.transit-loader--compact .transit-loader__scene { width: min(100%, 320px); height: 68px; border-radius: 12px; }
+.transit-loader--compact .transit-loader__vehicle { top: 3px; width: 92px; height: 54px; }
+.transit-loader--compact .transit-loader__label { font-size: 11px; }
+.transit-loader-page { display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 20px; background: #f3f7f6; }
+
+html[data-theme='dark'] .transit-loader {
+  --loader-muted: #b4c3d0;
+  --loader-bg: #172430;
+  --loader-border: #344656;
+  --loader-track: #60778a;
+  --loader-marking: #172430;
+  color: var(--loader-muted);
+}
+
+html[data-theme='dark'] .transit-loader-page { background: #0b111a; }
+html[data-theme='dark'] .transit-loader__window { fill: #b7dfe5; }
+html[data-theme='dark'] .transit-loader__wheel { fill: #0b111a; stroke: #728697; }
+
+@media (prefers-reduced-motion: reduce) {
+  .transit-loader__vehicle { transform: translateX(0) !important; }
+}

@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { deleteCurrentAccount as deleteAccountService, getCurrentUser, logout as logoutService, SignedInUser } from '../services/auth';
+import { readStoredStringList } from '../services/localPreferences';
+import { cancelDepartureReminders } from '../services/localDepartureNotifications';
 
 interface AuthUser {
   id: string;
@@ -42,12 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     await logoutService();
+    if (user) {
+      await Promise.all(readStoredStringList(`transit-atlas-tracked:${user.id}`).map(key => cancelDepartureReminders(key).catch(() => {})));
+    }
     setUser(null);
   }
 
   async function deleteAccount() {
     if (!user) return;
     await deleteAccountService();
+    const tracked = readStoredStringList(`transit-atlas-tracked:${user.id}`);
+    await Promise.all(tracked.map(key => cancelDepartureReminders(key).catch(() => {})));
     for (const key of ['tracked', 'favorite-routes', 'favorite-stops']) localStorage.removeItem(`transit-atlas-${key}:${user.id}`);
     setUser(null);
   }

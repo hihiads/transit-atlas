@@ -9,7 +9,7 @@ import PendingRegistration from '../models/PendingRegistration.js';
 import { randomBytes } from 'crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getRuntimeSettings, isAuthenticationEnabled } from '../config/runtimeSettings.js';
-import { requireTrustedOrigin } from '../config/origins.js';
+import { isNativeAppOrigin, requireTrustedOrigin } from '../config/origins.js';
 import { asyncRoute, authLimiter, emailActionLimiter, oauthCallbackLimiter, oauthChallengeLimiter } from '../middleware/security.js';
 import { deleteUserSessions } from '../services/authRuntime.js';
 
@@ -18,6 +18,14 @@ const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2
 const TERMS_VERSION = '2026-11-22-zet-hzpp';
 const registrationMessage = 'Ako se račun može otvoriti ili treba dodatnu potvrdu, provjerite email.';
 const verificationLifetime = 24 * 60 * 60 * 1000;
+
+function sessionCookieOptions(req) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: isNativeAppOrigin(req.get('origin')) ? 'none' : 'lax'
+  };
+}
 
 async function deliverVerification(email, token) {
   try {
@@ -223,6 +231,7 @@ router.post('/oauth/:provider',
       failureStage = 'session creation';
       req.session.regenerate(error => {
         if (error) return res.status(500).json({ error: 'Prijava nije uspjela.' });
+        if (isNativeAppOrigin(req.get('origin'))) req.session.cookie.sameSite = 'none';
         req.session.userId = user._id.toString();
         req.session.sessionVersion = user.sessionVersion || 0;
         req.session.save(saveError => {
@@ -367,6 +376,7 @@ router.post('/login',
           return res.status(500).json({ error: 'Greška pri prijavi' });
         }
 
+        if (isNativeAppOrigin(req.get('origin'))) req.session.cookie.sameSite = 'none';
         req.session.userId = user._id.toString();
         req.session.sessionVersion = user.sessionVersion || 0;
         req.session.save(saveError => {
@@ -396,7 +406,7 @@ router.post('/logout', (req, res) => {
         console.error('Logout error:', err.name);
         return res.status(500).json({ error: 'Greška pri odjavi' });
       }
-      res.clearCookie('sessionId', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+      res.clearCookie('sessionId', sessionCookieOptions(req));
       res.json({ message: 'Uspješna odjava' });
     });
   } else {
@@ -463,7 +473,7 @@ router.delete('/me', requireAuth, async (req, res, next) => {
     await User.findByIdAndDelete(req.session.userId);
     req.session.destroy(error => {
       if (error) return next(error);
-      res.clearCookie('sessionId', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+      res.clearCookie('sessionId', sessionCookieOptions(req));
       res.json({ message: 'Račun i njegovi podaci su izbrisani.' });
     });
   } catch (error) {

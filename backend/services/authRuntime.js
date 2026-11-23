@@ -5,12 +5,18 @@ import { createHash } from 'crypto';
 import { connectDatabase } from '../config/database.js';
 import { missingAuthenticationEnvironment } from '../config/runtimeSettings.js';
 import { ensurePasswordPepper } from '../utils/crypto.js';
+import { isNativeAppOrigin } from '../config/origins.js';
 
 let sessionMiddleware;
 let sessionCollection;
 
 export function getAuthenticationSessionMiddleware() {
-  return sessionMiddleware;
+  if (!sessionMiddleware) return undefined;
+  return (req, res, next) => sessionMiddleware(req, res, error => {
+    if (error) return next(error);
+    if (isNativeAppOrigin(req.get('origin')) && req.session) req.session.cookie.sameSite = 'none';
+    next();
+  });
 }
 
 export async function activateAuthentication() {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createOAuthChallenge, finishOAuth, getCurrentUser, getOAuthProviders, RegistrationConsent, SignedInUser } from '../../services/auth';
+import { isNativeApp } from '../../services/platform';
 
 declare global {
   interface Window {
@@ -42,6 +43,10 @@ export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSu
   consentRef.current = consent;
 
   useEffect(() => {
+    if (isNativeApp()) {
+      setGoogleEnabled(false);
+      return;
+    }
     let active = true;
     let refreshInterval: number | undefined;
     getOAuthProviders().then(async providers => {
@@ -93,6 +98,7 @@ export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSu
     return () => { active = false; if (refreshInterval) window.clearInterval(refreshInterval); };
   }, [intent]);
 
+  if (isNativeApp()) return null;
   return (
     <div className="mt-5 space-y-3">
       <div className="flex items-center gap-3 text-xs text-gray-600"><span className="h-px flex-1 bg-gray-200" /><span>ili nastavite s</span><span className="h-px flex-1 bg-gray-200" /></div>

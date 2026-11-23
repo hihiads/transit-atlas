@@ -3,6 +3,9 @@ import { Route, Stop, Departure } from '../types';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { readStoredStringList } from '../services/localPreferences';
+import { isNativeApp } from '../services/platform';
+import { cancelDepartureReminders, requestDepartureNotificationPermission, scheduleDepartureReminders } from '../services/localDepartureNotifications';
+import TransitLoadingAnimation from './TransitLoadingAnimation';
 
 interface SchedulePanelProps {
   cityId: string;
@@ -27,6 +30,7 @@ export default function SchedulePanel({ cityId, initialStopId, onClose, onRequir
   const [favoriteRoutes, setFavoriteRoutes] = useState<string[]>([]);
   const [favoriteStops, setFavoriteStops] = useState<string[]>([]);
   const [departureMessage, setDepartureMessage] = useState('');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   useEffect(() => {
     setTracked(user ? readStoredStringList(`transit-atlas-tracked:${user.id}`) : []);
@@ -88,12 +92,21 @@ export default function SchedulePanel({ cityId, initialStopId, onClose, onRequir
     };
   }, [selectedStop, cityId]);
 
-  function toggleTrack(dep: Departure) {
+  async function toggleTrack(dep: Departure) {
     if (!user) { onRequireLogin(); return; }
-    const key = `${cityId}:${selectedStop}:${dep.tripId}:${dep.time}`;
-    const next = tracked.includes(key) ? tracked.filter(item => item !== key) : [...tracked, key];
+    const key = `${cityId}:${selectedStop}:${dep.tripId}:${dep.time}:${dep.timestamp}`;
+    const removing = tracked.includes(key);
+    const next = removing ? tracked.filter(item => item !== key) : [...tracked, key];
     setTracked(next);
     localStorage.setItem(`transit-atlas-tracked:${user.id}`, JSON.stringify(next));
+    if (isNativeApp() && (removing || notificationsEnabled)) {
+      try {
+        if (removing) await cancelDepartureReminders(key);
+        else await scheduleDepartureReminders(key, dep.timestamp, dep.route, dep.direction);
+      } catch {
+        setDepartureMessage('Podsjetnik nije moguće spremiti. Provjerite dozvolu za obavijesti u postavkama uređaja.');
+      }
+    }
   }
 
   function toggleFavorite(id: string, kind: 'route' | 'stop') {
@@ -107,9 +120,28 @@ export default function SchedulePanel({ cityId, initialStopId, onClose, onRequir
 
   async function enableNotifications() {
     if (!user) { onRequireLogin(); return; }
-    if (!('Notification' in window)) { setDepartureMessage('Ovaj preglednik ne podržava obavijesti.'); return; }
-    const permission = await Notification.requestPermission();
-    setDepartureMessage(permission === 'granted' ? 'Obavijesti su uključene dok je aplikacija otvorena.' : 'Dozvola za obavijesti nije odobrena.');
+    try {
+      const granted = await requestDepartureNotificationPermission();
+      setNotificationsEnabled(granted);
+      if (!granted) {
+        setDepartureMessage('Dozvola za obavijesti nije odobrena.');
+        return;
+      }
+      if (isNativeApp()) {
+        const pending = departures.filter(dep => tracked.includes(`${cityId}:${selectedStop}:${dep.tripId}:${dep.time}:${dep.timestamp}`));
+        await Promise.all(pending.map(dep => scheduleDepartureReminders(
+          `${cityId}:${selectedStop}:${dep.tripId}:${dep.time}:${dep.timestamp}`,
+          dep.timestamp,
+          dep.route,
+          dep.direction
+        )));
+        setDepartureMessage('Podsjetnici koriste trenutačno prikazana vremena; kasnije kašnjenje ih neće ažurirati.');
+      } else {
+        setDepartureMessage('Obavijesti su uključene dok je aplikacija otvorena.');
+      }
+    } catch {
+      setDepartureMessage('Obavijesti trenutačno nisu dostupne. Pokušajte ponovno.');
+    }
   }
 
   const filteredRoutes = routes.filter(route =>
@@ -124,12 +156,7 @@ export default function SchedulePanel({ cityId, initialStopId, onClose, onRequir
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-white z-[1500] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <div className="text-gray-600">Učitavamo linije i polaske…</div>
-        </div>
-      </div>
+      <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-white"><TransitLoadingAnimation mode="bus" label="Učitavam linije i stanice…" /></div>
     );
   }
 
@@ -192,9 +219,9 @@ export default function SchedulePanel({ cityId, initialStopId, onClose, onRequir
                 ? ` — ${stops.find(stop => stop.id === selectedStop)?.name}`
                 : ''}
             </h3>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-gray-500">{departureMessage || (!user ? 'Prijavite se za praćenje polazaka i podsjetnike.' : '')}</span><button onClick={enableNotifications} className="text-sm text-primary underline">{user ? 'Uključi obavijesti' : 'Prijavi se za obavijesti'}</button></div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-gray-500">{departureMessage || (!user ? 'Prijavite se za praćenje polazaka i podsjetnike.' : '')}</span><button onClick={enableNotifications} className="text-sm text-primary underline">{user ? (isNativeApp() ? 'Uključi podsjetnike' : 'Uključi obavijesti') : 'Prijavi se za obavijesti'}</button></div>
             {departuresLoading ? (
-              <div className="text-center text-gray-500 py-4">Učitavanje polazaka...</div>
+              <TransitLoadingAnimation mode="tram" label="Učitavam polaske sa stanice…" compact />
             ) : departuresError ? (
               <div className="text-center text-red-600 py-4">Nije moguće učitati polaske. Pokušajte ponovno.</div>
             ) : departures.length === 0 ? (
@@ -217,7 +244,7 @@ export default function SchedulePanel({ cityId, initialStopId, onClose, onRequir
                       <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${dep.source === 'live' ? 'bg-emerald-100 text-emerald-800' : dep.source === 'estimated' ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-600'}`}>
                         {dep.source === 'live' ? 'Uživo' : dep.source === 'estimated' ? 'Procjena uživo' : 'Po rasporedu'}
                       </span>
-                      <button onClick={() => toggleTrack(dep)} className={`text-xs px-3 py-2 rounded-lg ${tracked.includes(`${cityId}:${selectedStop}:${dep.tripId}:${dep.time}`) ? 'bg-green-100 text-green-800' : 'bg-blue-50 text-primary'}`}>{tracked.includes(`${cityId}:${selectedStop}:${dep.tripId}:${dep.time}`) ? 'Prati se' : user ? 'Prati polazak' : 'Prijavi se za praćenje'}</button>
+                      <button onClick={() => void toggleTrack(dep)} className={`text-xs px-3 py-2 rounded-lg ${tracked.includes(`${cityId}:${selectedStop}:${dep.tripId}:${dep.time}:${dep.timestamp}`) ? 'bg-green-100 text-green-800' : 'bg-blue-50 text-primary'}`}>{tracked.includes(`${cityId}:${selectedStop}:${dep.tripId}:${dep.time}:${dep.timestamp}`) ? 'Prati se' : user ? 'Prati polazak' : 'Prijavi se za praćenje'}</button>
                     </div>
                   </div>
                 ))}

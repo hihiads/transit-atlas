@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { login, SignedInUser } from '../../services/auth';
 import SocialAuthButtons from './SocialAuthButtons';
+import { isNativeApp } from '../../services/platform';
 
 interface LoginFormProps {
   onSuccess: (user?: SignedInUser) => void | Promise<void>;
@@ -33,6 +34,7 @@ export default function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToFor
   return (
     <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
       <h2 className="text-2xl font-bold mb-6 text-center text-primary">Prijava</h2>
+      {isNativeApp() && <p className="mb-4 rounded-lg bg-slate-50 p-3 text-sm leading-5 text-slate-700">Google prijava nije dostupna u ovoj aplikaciji. Ako ste se prije prijavljivali Googleom, odaberite „Zaboravili ste lozinku?” da postavite lozinku za isti email.</p>}
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Transitly</string>
+    <string name="title_activity_main">Transitly</string>
+    <string name="package_name">eu.transitly.app</string>
+    <string name="custom_url_scheme">eu.transitly.app</string>
+</resources>

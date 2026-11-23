@@ -4,7 +4,15 @@ const developmentOrigins = process.env.NODE_ENV === 'production' ? [] : [
 ];
 
 function normalizeOrigin(value) {
-  try { return new URL(value).origin; } catch { return null; }
+  try {
+    const url = new URL(value);
+    return url.origin === 'null' ? `${url.protocol}//${url.host}` : url.origin;
+  } catch { return null; }
+}
+
+export function isNativeAppOrigin(origin) {
+  const normalized = normalizeOrigin(origin || '');
+  return normalized === 'https://localhost' || normalized === 'capacitor://localhost';
 }
 
 export function getAllowedOrigins() {
@@ -21,7 +29,7 @@ export function isAllowedOrigin(origin) {
 export function requireTrustedOrigin(req, res, next) {
   const origin = req.get('origin');
   const safeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-  if ((origin && !getAllowedOrigins().has(origin)) ||
+  if ((origin && !isAllowedOrigin(origin)) ||
       (!origin && !safeMethod && process.env.NODE_ENV === 'production')) {
     return res.status(403).json({ error: 'Zahtjev nije dopušten.' });
   }
