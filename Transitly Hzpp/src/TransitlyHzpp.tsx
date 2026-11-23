@@ -50,14 +50,20 @@ function normalize(value: string) {
   return value.toLocaleLowerCase('hr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\bkol\.?(?=\s|$)/g, 'kolodvor').replace(/\s+/g, ' ').trim();
 }
 
-function time(value?: string) {
+function time(value?: string | number) {
   if (!value) return '--:--';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '--:--' : new Intl.DateTimeFormat('hr-HR', { hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
-function minutesUntil(value: string) {
-  return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 60000));
+function effectiveDeparture(journey: Journey) {
+  const scheduled = new Date(journey.DepartureDateTime).getTime();
+  const delay = journey.TransportationsWithDelay?.TransportationWithDelay?.[0]?.Delay?.Delay;
+  return scheduled + (typeof delay === 'number' && Number.isFinite(delay) && delay > 0 ? delay * 60000 : 0);
+}
+
+function minutesUntil(timestamp: number) {
+  return Math.max(0, Math.ceil((timestamp - Date.now()) / 60000));
 }
 
 export default function TransitlyHzpp() {
@@ -105,10 +111,10 @@ export default function TransitlyHzpp() {
       const found: Journey[] = data?.JourneysTypesResponsev2?.JourneyWithTickets?.JourneysWithTicketsType ?? [];
       const selectedDay = found.filter(item => item.DepartureDateTime?.slice(0, 10) === query.date);
       const currentDayJourneys = query.date === zagrebDate()
-        ? selectedDay.filter(item => new Date(item.DepartureDateTime).getTime() > Date.now())
+        ? selectedDay.filter(item => effectiveDeparture(item) > Date.now())
         : selectedDay;
       const upcoming = currentDayJourneys
-        .sort((a, b) => new Date(a.DepartureDateTime).getTime() - new Date(b.DepartureDateTime).getTime());
+        .sort((a, b) => effectiveDeparture(a) - effectiveDeparture(b));
       setJourneys(upcoming);
       setMessage(upcoming.length ? '' : 'Za odabranu relaciju i datum nema dostupnih vlakova.');
     } catch (error) {
@@ -244,11 +250,12 @@ export default function TransitlyHzpp() {
             const delay = delays.length ? Math.max(...delays) : 0;
             const live = delay > 0;
             const delayedLeg = legs.find(leg => leg.Delay?.Delay === delay);
-            const wait = minutesUntil(journey.DepartureDateTime);
+            const departureAt = effectiveDeparture(journey);
+            const wait = minutesUntil(departureAt);
             const journeyKey = `${legs.map(leg => leg.Number).join('-')}-${journey.DepartureDateTime}`;
             const isExpanded = expandedJourney === journeyKey;
             return <article className={`departure-card ${index === 0 ? 'next-card' : ''}`} key={journeyKey}>
-              <div className="departure-times"><strong>{time(journey.DepartureDateTime)}</strong><span className="duration-line" /><strong>{time(journey.ArrivalDateTime)}</strong></div>
+              <div className="departure-times"><strong>{time(departureAt)}</strong><span className="duration-line" /><strong>{time(journey.ArrivalDateTime)}</strong></div>
               <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} /> Vlak {legs.map(leg => leg.Number).filter(Boolean).join(' → ') || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? `Kasni ${delay} min` : 'Po rasporedu'}</span></div>
               {legs.length > 1 && <div className="transfer-legs">{legs.map((leg, legIndex) => <span key={`${leg.Number}-${legIndex}`}>{leg.Start?.Name} → {leg.Dest?.Name}</span>)}</div>}
               <div className="card-footer"><span><Icon name="clock" size={13} /> {wait === 0 ? 'Uskoro polazi' : `Za ${wait} min`}</span>{live && delayedLeg?.Delay?.Station && <span>Zadnja prijava: {delayedLeg.Delay.Station}</span>}</div>
