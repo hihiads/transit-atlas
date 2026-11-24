@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Din Mulajusufović o tome kako nastaje Transitly, od podataka o polascima do karte, i kako pristupa autorskim pravima.">
+  <title>O Transitlyju | Din Mulajusufović</title>
+  <link rel="icon" href="favicon.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#sadrzaj">Preskoči na sadržaj</a>
+  <header class="top wrap">
+    <a class="brand" href="#sadrzaj"><img src="favicon.png" alt="" width="32" height="32"> O Transitlyju</a>
+    <nav aria-label="Glavna navigacija">
+      <a href="#izrada">Izrada</a>
+      <a href="#prava">Autorska prava</a>
+      <a href="https://transitly.eu" class="app">Otvori aplikaciju</a>
+    </nav>
+  </header>
+  <main id="sadrzaj">
+    <div class="hero wrap">
+      <div>
+        <p class="eyebrow">Neovisni projekt o javnom prijevozu</p>
+        <h1>Kako je nastao<br> <em>Transitly.</em></h1>
+        <p class="intro">Kad čekam tramvaj, zanima me nešto jednostavno. Kad je sljedeći polazak i na čemu se ta procjena temelji? Oko tog pitanja složio sam Transitly.</p>
+        <p class="signature">Din Mulajusufović <span>Autor projekta</span></p>
+      </div>
+      <figure class="diagram">
+        <figcaption>Od voznog reda do ekrana</figcaption>
+        <ol>
+          <li><strong>Vozni red</strong><span>Linije, stajališta i planirani polasci</span></li>
+          <li><strong>Podaci uživo</strong><span>Položaji i ažuriranja koja pošalje izvor</span></li>
+          <li><strong>Transitly</strong><span>Karta i pregled polazaka</span></li>
+        </ol>
+      </figure>
+    </div>
+    <div class="story wrap">
+      <section id="izrada">
+        <h2>Što se događa iza karte</h2>
+        <div>
+          <p>Za autobuse i tramvaje u Zagrebu krećem od statičkog GTFS-a. U njemu su stanice, linije, trase i planirana vremena. GTFS Realtime donosi drugi sloj podataka. Kad izvor pošalje položaj vozila ili ažuriranje polaska, Transitly ga može povezati s linijom i prikazati u aplikaciji.</p>
+          <p>Na karti je bitno razlikovati polazak označen kao <strong>„Po rasporedu”</strong> od onoga označenog kao <strong>„Uživo”</strong>. Prvi čitam iz voznog reda, drugi ima ažuriranje iz izvora. Ako podaci kasne, kasni i slika koju aplikacija može dati. Za promjene na terenu vrijedi pogledati obavijesti prijevoznika.</p>
+          <p>Sučelje je u Reactu i TypeScriptu. Kartu prikazujem Leafletom uz OpenStreetMap podlogu, a poslužiteljski dio radi na Node.js-u i Expressu. Za vlakove postoji zaseban pregled veza i presjedanja prema podacima HŽPP-a. Projekt vodim neovisno o ZET-u i HŽPP-u.</p>
+        </div>
+      </section>
+      <section id="prava">
+        <h2>Čiji su kod, karta i podaci?</h2>
+        <div>
+          <p>Svoj izvorni kod, tekstove i grafiku za Transitly vodim odvojeno od vanjskih materijala. Povijest izmjena koda čuvam u Gitu, a izvore i napomene o licencama bilježim uz projekt. Za ponovno objavljivanje mojih materijala ili uporabu logotipa u tuđem projektu možeš mi se javiti.</p>
+          <dl>
+            <div><dt>Karta</dt><dd>Na karti navodim <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>. Tamo su i informacije o licenci i navođenju izvora.</dd></div>
+            <div><dt>Prijevoz</dt><dd>Vozni redovi i podaci o vozilima dolaze iz izvora prijevoznika. Za njihovu ponovnu uporabu provjeri uvjete pojedinog izvora.</dd></div>
+            <div><dt>Biblioteke i ikone</dt><dd>Vanjske biblioteke, uključujući Leaflet i Lucide ikone, koristim pod njihovim licencama. Njihovi autori zadržavaju pripadajuća prava.</dd></div>
+          </dl>
+          <p>Za upit o dopuštenju ili prijavu spornog sadržaja piši na <a href="mailto:info@transitly.eu">info@transitly.eu</a>. Pošalji poveznicu i reci na koji se materijal upit odnosi.</p>
+        </div>
+      </section>
+      <section id="autor">
+        <h2>Tko stoji iza projekta</h2>
+        <div><p>Ja sam Din Mulajusufović. Razvijam i vodim Transitly. Kad mi javljaš da nešto na karti ne odgovara stanju na terenu, najviše mi pomažu broj linije, stajalište i približno vrijeme. Tako mogu pogledati što je izvor poslao i kako je Transitly to prikazao.</p>
+        <a class="contact" href="mailto:info@transitly.eu">Javi mi se</a></div>
+      </section>
+    </div>
+  </main>
+  <footer class="wrap bottom">
+    <span>© 2026 Din Mulajusufović</span>
+    <a href="https://transitly.eu/terms">Uvjeti korištenja aplikacije</a>
+  </footer>
+</body>
+</html>
