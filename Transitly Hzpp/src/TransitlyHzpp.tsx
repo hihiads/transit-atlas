@@ -28,6 +28,7 @@ type Station = ApiStation & { lat?: number; lon?: number };
 type DelayInfo = { Delay?: number | null; Station?: string | null } | null;
 type TrainLeg = { Number?: string; DepartureDateTime?: string; Delay?: DelayInfo; Start?: { Name?: string }; Dest?: { Name?: string } };
 type StopDetail = { name: string; arrival: string | null; departure: string | null };
+type JourneyDetails = { loading?: boolean; stops?: StopDetail[]; route?: { from: string; to: string }; error?: string };
 type Journey = {
   DepartureDateTime: string;
   ArrivalDateTime: string;
@@ -56,17 +57,16 @@ function normalize(value: string) {
 function time(value?: string | number) {
   if (!value) return '--:--';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '--:--' : new Intl.DateTimeFormat('hr-HR', { hour: '2-digit', minute: '2-digit' }).format(date);
+  return Number.isNaN(date.getTime()) ? '--:--' : new Intl.DateTimeFormat('hr-HR', { timeZone: 'Europe/Zagreb', hour: '2-digit', minute: '2-digit' }).format(date);
+}
+
+function delayMinutes(leg?: TrainLeg) {
+  const delay = leg?.Delay?.Delay;
+  return typeof delay === 'number' && Number.isFinite(delay) && delay > 0 ? delay : 0;
 }
 
 function effectiveDeparture(journey: Journey) {
-  const scheduled = new Date(journey.DepartureDateTime).getTime();
-  const delay = journey.TransportationsWithDelay?.TransportationWithDelay?.[0]?.Delay?.Delay;
-  return scheduled + (typeof delay === 'number' && Number.isFinite(delay) && delay > 0 ? delay * 60000 : 0);
-}
-
-function minutesUntil(timestamp: number) {
-  return Math.max(0, Math.ceil((timestamp - Date.now()) / 60000));
+  return Date.parse(journey.DepartureDateTime) + delayMinutes(journey.TransportationsWithDelay?.TransportationWithDelay?.[0]) * 60000;
 }
 
 export default function TransitlyHzpp() {
@@ -88,7 +88,7 @@ export default function TransitlyHzpp() {
   const [showSiteMenu, setShowSiteMenu] = useState(false);
   const [darkMode, setDarkMode] = useState(() => readTheme() === 'dark');
   const [expandedJourney, setExpandedJourney] = useState<string | null>(null);
-  const [journeyDetails, setJourneyDetails] = useState<Record<string, { loading?: boolean; stops?: StopDetail[]; error?: string }>>({});
+  const [journeyDetails, setJourneyDetails] = useState<Record<string, JourneyDetails>>({});
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ loginEnabled: true, registrationEnabled: true, authenticationActive: true });
   const requestId = useRef(0);
 
@@ -193,8 +193,8 @@ export default function TransitlyHzpp() {
         const response = await fetch(`${HZPP}/journey-stops?${params}`);
         if (!response.ok) throw new Error('Vozni red stanica trenutačno nije dostupan.');
         const data = await response.json();
-        const stops = data.journeys?.[0]?.stops as StopDetail[] | undefined;
-        setJourneyDetails(current => ({ ...current, [detailKey]: stops?.length ? { stops } : { error: 'Popis stanica nije dostupan za ovaj vlak i datum.' } }));
+        const detail: JourneyDetails | undefined = data.journeys?.[0];
+        setJourneyDetails(current => ({ ...current, [detailKey]: detail?.stops?.length ? detail : { error: 'Popis stanica nije dostupan za ovaj vlak i datum.' } }));
       } catch (error) {
         setJourneyDetails(current => ({ ...current, [detailKey]: { error: error instanceof Error ? error.message : 'Ne mogu učitati stanice.' } }));
       }
@@ -251,16 +251,28 @@ export default function TransitlyHzpp() {
           {message && !journeys.length && <div className="empty-state error-state">{message}</div>}
           {journeys.map((journey, index) => {
             const legs = journey.TransportationsWithDelay?.TransportationWithDelay ?? [];
-            const delays = legs.map(leg => leg.Delay?.Delay).filter((delay): delay is number => typeof delay === 'number' && delay > 0);
-            const delay = delays.length ? Math.max(...delays) : 0;
+            const departureDelay = delayMinutes(legs[0]);
+            const arrivalDelay = delayMinutes(legs[legs.length - 1]);
+            const delay = Math.max(0, ...legs.map(delayMinutes));
             const live = delay > 0;
             const delayedLeg = legs.find(leg => leg.Delay?.Delay === delay);
             const departureAt = effectiveDeparture(journey);
-            const wait = minutesUntil(departureAt);
+            const arrivalAt = Date.parse(journey.ArrivalDateTime) + arrivalDelay * 60000;
+            const duration = Math.round((arrivalAt - departureAt) / 60000);
+            const wait = Math.max(0, Math.ceil((departureAt - now) / 60000));
+            const durationLabel = duration >= 60
+              ? `${Math.floor(duration / 60)} h ${duration % 60} min`
+              : `${duration} min`;
             const journeyKey = `${legs.map(leg => leg.Number).join('-')}-${journey.DepartureDateTime}`;
             const isExpanded = expandedJourney === journeyKey;
             return <article className={`departure-card ${index === 0 ? 'next-card' : ''}`} key={journeyKey}>
-              <div className="departure-times"><strong>{time(departureAt)}</strong><span className="duration-line" /><strong>{time(journey.ArrivalDateTime)}</strong></div>
+              <div className="departure-times">
+                <span><small>{departureDelay ? 'Procijenjeni polazak' : 'Polazak'}</small><strong>{time(departureAt)}</strong></span>
+                <span className="duration-line" aria-hidden="true" />
+                <span><small>{arrivalDelay ? 'Procijenjeni dolazak' : 'Dolazak'}</small><strong>{time(arrivalAt)}</strong></span>
+              </div>
+              {departureDelay > 0 && <p className="scheduled-arrival-note">Vlak je trebao doći u {time(journey.DepartureDateTime)}</p>}
+              {Number.isFinite(duration) && duration >= 0 && <p className="scheduled-arrival-note">Trajanje vožnje: {durationLabel}</p>}
               <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} /> Vlak {legs.map(leg => leg.Number).filter(Boolean).join(' → ') || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? `Kasni ${delay} min` : 'Po rasporedu'}</span></div>
               {legs.length > 1 && <div className="transfer-legs">{legs.map((leg, legIndex) => <span key={`${leg.Number}-${legIndex}`}>{leg.Start?.Name} → {leg.Dest?.Name}</span>)}</div>}
               <div className="card-footer"><span><Icon name="clock" size={13} /> {wait === 0 ? 'Uskoro polazi' : `Za ${wait} min`}</span>{live && delayedLeg?.Delay?.Station && <span>Zadnja prijava: {delayedLeg.Delay.Station}</span>}</div>
@@ -269,7 +281,7 @@ export default function TransitlyHzpp() {
                 {legs.map((leg, legIndex) => {
                   const detail = journeyDetails[`${journeyKey}:${legIndex}`];
                   return <section className="leg-stops" key={`${leg.Number}-${legIndex}`}>
-                    {legs.length > 1 && <h3>Vlak {leg.Number}: {leg.Start?.Name} → {leg.Dest?.Name}</h3>}
+                    <h3>Vlak {leg.Number}{detail?.route && ` · Linija ${detail.route.from} – ${detail.route.to}`}</h3>
                     {detail?.loading && <TransitLoadingAnimation mode="train" label="Učitavam stanice vlaka…" compact />}
                     {detail?.error && <p role="status">{detail.error}</p>}
                     {detail?.stops?.map((stop, stopIndex) => <div className="stop-row" key={`${stop.name}-${stopIndex}`}><span className="stop-dot" /><strong>{stop.name}</strong><span>{stopIndex === 0 ? 'Polazak' : 'Dolazak'} <b>{stopIndex === 0 ? stop.departure || stop.arrival || '—' : stop.arrival || stop.departure || '—'}</b></span>{stopIndex > 0 && stopIndex < detail.stops!.length - 1 && stop.departure && stop.departure !== stop.arrival && <span>Polazak <b>{stop.departure}</b></span>}</div>)}

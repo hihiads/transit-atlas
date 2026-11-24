@@ -924,6 +924,7 @@ app.get('/hzpp-api/journey-stops', async (req, res) => {
       if (!stop) continue;
       stopsOnTrip.push({ name: stop.stop_name, sequence: values[i + 1], arrival: stride === 4 ? values[i + 2] : 0, departure: stride === 4 ? values[i + 3] : 0 });
     }
+    stopsOnTrip.sort((a, b) => a.sequence - b.sequence);
     const fromIndex = stopsOnTrip.findIndex(stop => stopName({ stop_name: stop.name }) === norm(start));
     const toIndex = stopsOnTrip.findIndex((stop, index) => index > fromIndex && stopName({ stop_name: stop.name }) === norm(end));
     if (fromIndex < 0 || toIndex < 0) continue;
@@ -936,10 +937,11 @@ app.get('/hzpp-api/journey-stops', async (req, res) => {
     const expected = typeof departure === 'string' && /^\d{2}:\d{2}$/.test(departure)
       ? Number(departure.slice(0, 2)) * 3600 + Number(departure.slice(3)) * 60
       : null;
-    matches.push({ stops: routeStops, distance: expected === null ? 0 : Math.abs(startDeparture - expected) });
+    const route = { from: stopsOnTrip[0].name, to: stopsOnTrip.at(-1).name };
+    matches.push({ stops: routeStops, route, distance: expected === null ? 0 : Math.abs(startDeparture - expected) });
   }
   matches.sort((a, b) => a.distance - b.distance);
-  res.json({ source: 'GTFS raspored', journeys: matches.slice(0, 1).map(({ stops }) => ({ stops })) });
+  res.json({ source: 'GTFS raspored', journeys: matches.slice(0, 1).map(({ stops, route }) => ({ stops, route })) });
 });
 
 // Status sistema
