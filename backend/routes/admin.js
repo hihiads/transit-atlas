@@ -4,10 +4,11 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { getRuntimeSettings, isAuthenticationEnabled, missingAuthenticationEnvironment, saveRuntimeSettings } from '../config/runtimeSettings.js';
 import { activateAuthentication } from '../services/authRuntime.js';
-import { adminLimiter, adminTotpLimiter } from '../middleware/security.js';
+import { adminLimiter, adminTotpLimiter, asyncRoute } from '../middleware/security.js';
 import { requireTrustedOrigin } from '../config/origins.js';
 import { requireAdminAccess } from '../middleware/adminAccess.js';
 import { adminTotpConfigured, consumeAdminTotp } from '../middleware/adminTotp.js';
+import { readAnnouncement, publishAnnouncement, unpublishAnnouncement } from '../services/siteAnnouncement.js';
 
 const router = express.Router();
 const cookieName = 'transit-admin';
@@ -74,6 +75,30 @@ router.post('/login', adminLimiter, body('password').isString().isLength({ min: 
 });
 
 router.use(requireAdmin);
+
+router.get('/announcement', asyncRoute(async (req, res) => {
+  res.json({ announcement: await readAnnouncement() });
+}));
+
+router.put('/announcement',
+  body('text').isString().bail().trim().isLength({ min: 1, max: 280 }),
+  body('level').isString().bail().isIn(['info', 'warning']),
+  body('expiresAt').custom(value => value === null || (typeof value === 'string' && Date.parse(value) > Date.now())),
+  asyncRoute(async (req, res) => {
+    if (!validationResult(req).isEmpty()) return res.status(400).json({ error: 'Unesite poruku i odaberite vrijeme isteka u budućnosti.' });
+    if (!process.env.MONGODB_URI) return res.status(503).json({ error: 'Za objavu najava potrebna je MongoDB veza.' });
+    const announcement = await publishAnnouncement(req.body);
+    console.info(JSON.stringify({ event: 'admin.announcement_published' }));
+    res.json({ announcement });
+  })
+);
+
+router.delete('/announcement', asyncRoute(async (req, res) => {
+  if (!process.env.MONGODB_URI) return res.status(503).json({ error: 'Za objavu najava potrebna je MongoDB veza.' });
+  await unpublishAnnouncement();
+  console.info(JSON.stringify({ event: 'admin.announcement_unpublished' }));
+  res.json({ announcement: null });
+}));
 
 router.post('/logout', (req, res) => {
   if (adminSessions.delete(sessionKey(req))) {

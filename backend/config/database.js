@@ -1,6 +1,17 @@
 import mongoose from 'mongoose';
 
-export async function connectDatabase() {
+let connecting;
+
+export function connectDatabase() {
+  if (mongoose.connection.readyState === 1) return Promise.resolve();
+  connecting ??= openDatabase().finally(() => { connecting = undefined; });
+  return connecting;
+}
+
+mongoose.connection.on("error", err => console.error("[MongoDB] Greška:", err.name));
+mongoose.connection.on("disconnected", () => console.warn("[MongoDB] Veza prekinuta."));
+
+async function openDatabase() {
   if (!process.env.MONGODB_URI) {
     throw new Error('MONGODB_URI not configured');
   }
@@ -16,11 +27,4 @@ export async function connectDatabase() {
     throw new Error('MongoDB connection failed');
   }
 
-  mongoose.connection.on('error', (err) => {
-    console.error('[MongoDB] Greška:', err.name);
-  });
-
-  mongoose.connection.on('disconnected', () => {
-    console.warn('[MongoDB] Veza prekinuta');
-  });
 }

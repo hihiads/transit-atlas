@@ -1,5 +1,6 @@
 import { locale, relativeUpdateTime, t } from '../services/i18n';
 import { FormEvent, useEffect, useState } from 'react';
+import AdminAnnouncement from './AdminAnnouncement';
 
 interface Settings {
   loginEnabled: boolean;
@@ -17,6 +18,7 @@ interface SystemStatus {
   stats?: { routes: number; stops: number };
   rtFeedStatus?: string;
   staleVehiclesDropped?: number;
+  lastGtfsUpdate?: string | null;
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -38,6 +40,8 @@ export default function AdminPanel() {
   const [busy, setBusy] = useState(false);
   const [refreshingData, setRefreshingData] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState('');
+  const [refreshingTimetable, setRefreshingTimetable] = useState(false);
+  const [timetableMessage, setTimetableMessage] = useState('');
   const [system, setSystem] = useState<SystemStatus | null>(null);
 
   async function loadSettings() {
@@ -112,6 +116,20 @@ export default function AdminPanel() {
     }
   }
 
+  async function refreshTimetable() {
+    setTimetableMessage('');
+    setRefreshingTimetable(true);
+    try {
+      const result = await request<{ lastGtfsUpdate: string }>('/system/refresh-timetable', { method: 'POST' });
+      setSystem(previous => ({ ...previous, lastGtfsUpdate: result.lastGtfsUpdate }));
+      setTimetableMessage(t("Vozni red je osvježen."));
+    } catch (error) {
+      setTimetableMessage(error instanceof Error ? error.message : t("Osvježavanje voznog reda nije uspjelo."));
+    } finally {
+      setRefreshingTimetable(false);
+    }
+  }
+
   return (
     <main className="h-screen overflow-y-auto bg-slate-50 px-4 py-8 text-slate-900 sm:py-14">
       <div className="mx-auto max-w-2xl">
@@ -151,6 +169,8 @@ export default function AdminPanel() {
             {message && <p className="mt-3 text-sm text-slate-700" role="status">{message}</p>}
           </section>
 
+          <AdminAnnouncement request={request} />
+
           <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="font-semibold">{t("Stanje podataka")}</h2>
             <div className="mt-4 grid grid-cols-2 gap-3">
@@ -161,6 +181,11 @@ export default function AdminPanel() {
             {system?.staleVehiclesDropped ? <p className="mt-1 text-sm text-amber-800">{t("Odbačeno zastarjelih lokacija:") + " "}{system.staleVehiclesDropped}</p> : null}
             <button onClick={refreshTransitData} disabled={refreshingData} className="mt-4 rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-800 disabled:bg-slate-400">{refreshingData ? t("Dohvaćam ZET podatke…") : t("Osvježi podatke sa ZET-a")}</button>
             {refreshMessage && <p className="mt-3 text-sm text-slate-700" role="status">{refreshMessage}</p>}
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <p className="text-sm text-slate-600">{t("Vozni red zadnji put učitan")}{": "}{system?.lastGtfsUpdate ? new Date(system.lastGtfsUpdate).toLocaleString(locale) : "—"}</p>
+              <button onClick={refreshTimetable} disabled={refreshingTimetable} className="mt-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">{refreshingTimetable ? t("Učitavam vozni red…") : t("Osvježi zagrebački vozni red")}</button>
+              {timetableMessage && <p className="mt-2 text-sm text-slate-700" role="status">{timetableMessage}</p>}
+            </div>
           </section>
         </>}
       </div>

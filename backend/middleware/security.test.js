@@ -5,6 +5,7 @@ import { once } from 'node:events';
 import { request } from 'node:http';
 import { after, test } from 'node:test';
 import express from 'express';
+import mongoose from 'mongoose';
 
 const host = 'admin.transitly.test';
 const password = 'fixture-admin-password-long';
@@ -27,6 +28,7 @@ const { default: secondLookRoutes } = await import('../routes/secondlook.js');
 const { default: authRoutes } = await import('../routes/auth.js');
 const { default: User } = await import('../models/User.js');
 const { hashPassword } = await import('../utils/crypto.js');
+const { readAnnouncement } = await import('../services/siteAnnouncement.js');
 const localFetch = globalThis.fetch;
 
 const app = express();
@@ -61,7 +63,8 @@ function send(path, { headers, body, method = body === undefined ? 'GET' : 'POST
 }
 
 test('admin requires its own host and an unused authenticator code before issuing a session', async t => {
-  t.mock.timers.enable({ apis: ['Date'], now: 59_000 });
+  const clock = t.mock.timers;
+  clock.enable({ apis: ['Date'], now: 59_000 });
   const headers = { host };
   const origin = 'https://' + host;
   const post = (body, requestOrigin = origin) => send('/api/admin/login', { headers: { ...headers, origin: requestOrigin }, body });
@@ -77,6 +80,7 @@ test('admin requires its own host and an unused authenticator code before issuin
     assert.equal(redirect.headers['cache-control'], 'no-store');
   }
   assert.equal((await send('/api/admin/settings', { headers })).statusCode, 401);
+  assert.equal((await send('/api/admin/announcement', { headers: { ...headers, origin }, method: 'PUT', body: {} })).statusCode, 401);
   assert.equal((await post({ password, code }, 'https://transitly.test')).statusCode, 403);
   assert.equal((await post({ password })).statusCode, 401);
   assert.equal((await post({ password, code: '000000' })).statusCode, 401);
@@ -88,6 +92,36 @@ test('admin requires its own host and an unused authenticator code before issuin
   assert.equal((await post({ password, code })).statusCode, 401);
   headers.cookie = login.headers['set-cookie'][0].split(';')[0];
   assert.equal((await send('/api/admin/settings', { headers })).statusCode, 200);
+  await t.test('publish, expire and unpublish a public announcement', async t => {
+    const previousUri = process.env.MONGODB_URI;
+    const previousDb = mongoose.connection.db;
+    let stored;
+    const collection = {
+      replaceOne: async (filter, replacement) => { assert.equal(filter._id, 'current'); stored = replacement; },
+      findOne: async filter => stored && (!stored.expiresAt || stored.expiresAt > filter.$or[1].expiresAt.$gt) ? stored : null,
+      deleteOne: async () => { stored = null; }
+    };
+    process.env.MONGODB_URI = 'mongodb://127.0.0.1/fixture';
+    Object.defineProperty(mongoose.connection, 'readyState', { configurable: true, value: 1 });
+    mongoose.connection.db = { collection: name => { assert.equal(name, 'site_announcements'); return collection; } };
+    t.after(() => {
+      if (previousUri === undefined) delete process.env.MONGODB_URI; else process.env.MONGODB_URI = previousUri;
+      delete mongoose.connection.readyState;
+      mongoose.connection.db = previousDb;
+    });
+    const change = (method, body) => send('/api/admin/announcement', { headers: { ...headers, origin }, method, body });
+    assert.equal((await change('PUT', { text: ' ', level: 'warning', expiresAt: null })).statusCode, 400);
+    assert.equal((await change('PUT', { text: 'Diversion', level: ['info'], expiresAt: null })).statusCode, 400);
+    assert.equal((await change('PUT', { text: 'Diversion', level: 'warning', expiresAt: new Date(58000).toISOString() })).statusCode, 400);
+    assert.equal((await change('PUT', { text: ' Diversion ', level: 'warning', expiresAt: new Date(60000).toISOString() })).statusCode, 200);
+    assert.equal((await readAnnouncement()).text, 'Diversion');
+    assert.equal((await readAnnouncement()).level, 'warning');
+    assert.equal((await change('DELETE')).statusCode, 200);
+    assert.equal(await readAnnouncement(), null);
+    assert.equal((await change('PUT', { text: 'Diversion', level: 'info', expiresAt: new Date(60000).toISOString() })).statusCode, 200);
+    clock.tick(1001);
+    assert.equal(await readAnnouncement(), null);
+  });
   assert.equal((await send('/api/admin/logout', { headers: { ...headers, origin }, method: 'POST' })).statusCode, 200);
   assert.equal((await send('/api/admin/settings', { headers })).statusCode, 401);
 });

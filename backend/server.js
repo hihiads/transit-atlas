@@ -12,6 +12,7 @@ import { parse } from 'csv-parse/sync';
 import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
+import { readAnnouncement } from './services/siteAnnouncement.js';
 import secondLookRoutes from './routes/secondlook.js';
 import { apiLimiter, asyncRoute, heavyLimiter, vehiclesLimiter } from './middleware/security.js';
 import { redirectAdminHome, requireAdminAccess } from './middleware/adminAccess.js';
@@ -384,6 +385,7 @@ async function loadGtfsData() {
   } finally {
     gtfsLoadInProgress = false;
   }
+  return gtfsLoadError === null;
 }
 
 async function loadHzppData() {
@@ -604,6 +606,10 @@ app.use('/api/auth', (req, res, next) => {
   return middleware ? middleware(req, res, next) : next();
 }, attachUser, authRoutes);
 app.use('/api', secondLookRoutes);
+
+app.get('/api/announcement', asyncRoute(async (req, res) => {
+  res.set('Cache-Control', 'no-store').json({ announcement: await readAnnouncement() });
+}));
 
 // Gradovi
 app.get('/api/cities', (req, res) => {
@@ -950,6 +956,17 @@ app.get('/hzpp-api/journey-stops', heavyLimiter, asyncRoute(async (req, res) => 
   if (journeyStopsCache.size >= 256) journeyStopsCache.delete(journeyStopsCache.keys().next().value);
   journeyStopsCache.set(key, { result, expiresAt: Date.now() + 60_000 });
   res.json(result);
+}));
+
+let lastManualTimetableRefresh = 0;
+adminRoutes.post('/system/refresh-timetable', asyncRoute(async (req, res) => {
+  if (gtfsLoadInProgress) return res.status(409).json({ error: 'Vozni red se već učitava.' });
+  if (Date.now() - lastManualTimetableRefresh < 5 * 60_000) {
+    return res.status(429).json({ error: 'Pričekajte pet minuta između ručnih osvježavanja.' });
+  }
+  lastManualTimetableRefresh = Date.now();
+  if (!await loadGtfsData()) return res.status(502).json({ error: 'Osvježavanje voznog reda nije uspjelo.' });
+  res.json({ lastGtfsUpdate });
 }));
 
 adminRoutes.get('/system/status', (req, res) => {
