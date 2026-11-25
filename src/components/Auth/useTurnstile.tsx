@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { language, t } from '../../services/i18n';
 import { API_ORIGIN, isNativeApp } from '../../services/platform';
 
-type Action = 'login' | 'register' | 'forgot_password';
+type Action = 'login' | 'register' | 'forgot_password' | 'analyze_photos';
 
 interface Turnstile {
   render: (element: HTMLElement, options: {
@@ -22,7 +22,8 @@ declare global {
   interface Window { turnstile?: Turnstile }
 }
 
-const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+const configuredSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim();
+const siteKey = import.meta.env.DEV || !/^[123]x0{8}/.test(configuredSiteKey || '') ? configuredSiteKey : undefined;
 const optional = import.meta.env.DEV && !siteKey;
 const messageType = 'transitly-turnstile';
 let scriptLoad: Promise<Turnstile> | undefined;
@@ -50,14 +51,14 @@ function loadTurnstile() {
   return scriptLoad;
 }
 
-export function useTurnstile(action: Action, hosted = false) {
+export function useTurnstile(action: Action, { hosted = false, enabled = true } = {}) {
   const [token, setToken] = useState('');
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const container = useRef<HTMLDivElement>(null);
   const widget = useRef<string>();
   const frame = useRef<HTMLIFrameElement>(null);
-  const bridgeOrigin = !hosted && !optional && isNativeApp() ? new URL(API_ORIGIN).origin : '';
+  const bridgeOrigin = enabled && !hosted && !optional && isNativeApp() ? new URL(API_ORIGIN).origin : '';
 
   useEffect(() => {
     if (!bridgeOrigin) return;
@@ -72,6 +73,7 @@ export function useTurnstile(action: Action, hosted = false) {
   }, [bridgeOrigin]);
 
   useEffect(() => {
+    if (!enabled) { setToken(''); return; }
     const element = container.current;
     if (!siteKey || !element) return;
     let active = true;
@@ -91,7 +93,7 @@ export function useTurnstile(action: Action, hosted = false) {
       if (widget.current !== undefined) window.turnstile?.remove(widget.current);
       widget.current = undefined;
     };
-  }, [action]);
+  }, [action, enabled]);
 
   function reset() {
     setToken('');
@@ -100,7 +102,7 @@ export function useTurnstile(action: Action, hosted = false) {
   }
 
   const query = new URLSearchParams({ action, parent: `${window.location.protocol}//${window.location.host}` });
-  const challenge = bridgeOrigin ? (
+  const challenge = !enabled ? null : bridgeOrigin ? (
     <iframe key={attempt} ref={frame} src={`${bridgeOrigin}/auth/turnstile?${query}`}
       title={t("Sigurnosna provjera")} referrerPolicy="no-referrer" className="h-28 w-full border-0" />
   ) : optional ? null : <>
@@ -111,7 +113,7 @@ export function useTurnstile(action: Action, hosted = false) {
 }
 
 function HostedChallenge({ action, parent }: { action: Action; parent: string }) {
-  const { challenge, token } = useTurnstile(action, true);
+  const { challenge, token } = useTurnstile(action, { hosted: true });
   useEffect(() => {
     window.parent.postMessage({ type: messageType, token }, parent);
   }, [parent, token]);

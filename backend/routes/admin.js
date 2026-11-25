@@ -1,3 +1,4 @@
+import { hasStrongAdminPassword, isDev } from '../config/env.js';
 import { createHash, timingSafeEqual, randomBytes } from 'crypto';
 import express from 'express';
 import { body, validationResult } from 'express-validator';
@@ -10,7 +11,7 @@ import { adminTotpConfigured, consumeAdminTotp } from '../middleware/adminTotp.j
 
 const router = express.Router();
 const cookieName = 'transit-admin';
-const cookieOptions = { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production', path: '/api/admin', maxAge: 30 * 60 * 1000 };
+const cookieOptions = { httpOnly: true, sameSite: 'strict', secure: !isDev, path: '/api/admin', maxAge: 30 * 60 * 1000 };
 
 const adminSessions = new Map();
 
@@ -31,7 +32,7 @@ function requireAdmin(req, res, next) {
 
 router.use(requireAdminAccess);
 router.use((req, res, next) => {
-  if (process.env.NODE_ENV !== 'production') return requireTrustedOrigin(req, res, next);
+  if (isDev) return requireTrustedOrigin(req, res, next);
   const origin = req.get('origin');
   if (origin === `https://${process.env.ADMIN_HOST?.trim().toLowerCase()}` ||
       (!origin && ['GET', 'HEAD', 'OPTIONS'].includes(req.method))) return next();
@@ -40,7 +41,7 @@ router.use((req, res, next) => {
 router.use(express.json({ limit: '10kb' }), express.urlencoded({ extended: true, limit: '10kb' }));
 
 router.post('/login', adminLimiter, body('password').isString().isLength({ min: 1, max: 256 }), (req, res, next) => {
-  if (!adminTotpConfigured || !process.env.ADMIN_PANEL_PASSWORD || process.env.ADMIN_PANEL_PASSWORD.length < 16) {
+  if (!adminTotpConfigured || !hasStrongAdminPassword()) {
     return res.status(503).json({ error: 'Administratorska prijava nije konfigurirana.' });
   }
   const errors = validationResult(req);

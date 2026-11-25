@@ -10,7 +10,7 @@ npm install
 2. Configure API key:
 ```bash
 # Copy example env file
-cp .env.secondlook.example .env
+cp .env.example .env
 
 # Edit .env and add your Gemini API key
 # Get one at: https://aistudio.google.com/app/apikey

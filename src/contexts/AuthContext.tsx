@@ -14,7 +14,7 @@ interface AuthContextType {
   loading: boolean;
   login: (user?: SignedInUser) => Promise<void>;
   logout: () => Promise<void>;
-  deleteAccount: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -50,9 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
-  async function deleteAccount() {
+  async function deleteAccount(password: string) {
     if (!user) return;
-    await deleteAccountService();
+    await deleteAccountService(password);
     const tracked = readStoredStringList(`transit-atlas-tracked:${user.id}`);
     await Promise.all(tracked.map(key => cancelDepartureReminders(key).catch(() => {})));
     for (const key of ['tracked', 'favorite-routes', 'favorite-stops']) localStorage.removeItem(`transit-atlas-${key}:${user.id}`);

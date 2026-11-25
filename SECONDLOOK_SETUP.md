@@ -17,7 +17,7 @@ Get a free API key at: https://aistudio.google.com/app/apikey
 
 Create a `.env` file in the project root:
 ```bash
-cp .env.secondlook.example .env
+cp .env.example .env
 ```
 
 Edit `.env` and add your key:
@@ -67,7 +67,7 @@ SecondLook Files:
 ├── secondlook.html              # HTML entry
 ├── SECONDLOOK_README.md         # Full documentation
 ├── QUICKSTART.md                # Quick reference
-└── .env.secondlook.example      # Config template
+└── .env.example      # Config template
 ```
 
 ## Need Help?

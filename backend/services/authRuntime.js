@@ -1,7 +1,7 @@
+import { isDev } from '../config/env.js';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import mongoose from 'mongoose';
-import { createHash } from 'crypto';
 import { connectDatabase } from '../config/database.js';
 import { missingAuthenticationEnvironment } from '../config/runtimeSettings.js';
 import { ensurePasswordPepper } from '../utils/crypto.js';
@@ -31,11 +31,11 @@ export async function activateAuthentication() {
   });
   sessionCollection = await store.collectionP;
   sessionMiddleware = session({
-    secret: process.env.SESSION_SECRET || createHash('sha256').update(`transit-session:${process.env.ADMIN_PANEL_PASSWORD}`).digest('hex'),
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     store,
-    cookie: { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 },
+    cookie: { httpOnly: true, secure: !isDev, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 },
     name: 'sessionId',
     rolling: true
   });

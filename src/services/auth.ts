@@ -120,8 +120,11 @@ export async function logout(): Promise<void> {
   await handleResponse<{ message: string }>(response);
 }
 
-export async function deleteCurrentAccount(): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/auth/me`, { method: 'DELETE', credentials: 'include' });
+export async function deleteCurrentAccount(password: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/auth/me`, {
+    method: 'DELETE', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
+  });
   await handleResponse<{ message: string }>(response);
 }
 

@@ -1,4 +1,5 @@
-const developmentOrigins = process.env.NODE_ENV === 'production' ? [] : [
+import { isDev } from './env.js';
+const developmentOrigins = !isDev ? [] : [
   'http://localhost:3000', 'http://localhost:4173', 'http://localhost:5173', 'http://localhost:3001',
   'http://127.0.0.1:3000', 'http://127.0.0.1:4173', 'http://127.0.0.1:5173', 'http://127.0.0.1:3001'
 ];
@@ -30,7 +31,7 @@ export function requireTrustedOrigin(req, res, next) {
   const origin = req.get('origin');
   const safeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(req.method);
   if ((origin && !isAllowedOrigin(origin)) ||
-      (!origin && !safeMethod && process.env.NODE_ENV === 'production')) {
+      (!origin && !safeMethod && !isDev)) {
     return res.status(403).json({ error: 'Zahtjev nije dopušten.' });
   }
   next();

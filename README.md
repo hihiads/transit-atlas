@@ -142,7 +142,7 @@ MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/transit-atlas?retryW
 # Zasebne tajne obvezne za autentifikaciju u produkciji
 SESSION_SECRET=<nasumična-tajna-od-najmanje-32-znaka>
 PASSWORD_PEPPER=<stalna-nasumična-tajna-od-najmanje-32-znaka>
-ADMIN_PANEL_PASSWORD=<nasumična administratorska lozinka od najmanje 16 znakova>
+ADMIN_PANEL_PASSWORD=<nasumična administratorska lozinka od najmanje 24 znaka>
 AUTH_LOGIN_ENABLED=true
 AUTH_REGISTRATION_ENABLED=true
 AUTH_GOOGLE_ENABLED=true

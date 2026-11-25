@@ -1,10 +1,11 @@
+import { isDev } from '../config/env.js';
 import nodemailer from 'nodemailer';
 
 const transporter = () => nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT || 587),
   secure: Number(process.env.SMTP_PORT) === 465,
-  requireTLS: process.env.NODE_ENV === 'production',
+  requireTLS: !isDev,
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   disableFileAccess: true,
   disableUrlAccess: true
@@ -12,11 +13,11 @@ const transporter = () => nodemailer.createTransport({
 
 async function send(to, subject, link, action, language) {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.SMTP_FROM || !process.env.APP_BASE_URL) {
-    if (process.env.NODE_ENV !== 'production') return false;
+    if (isDev) return false;
     throw new Error('SMTP nije konfiguriran');
   }
   const destination = new URL(link, process.env.APP_BASE_URL);
-  if (process.env.NODE_ENV === 'production' && destination.protocol !== 'https:') {
+  if (!isDev && destination.protocol !== 'https:') {
     throw new Error('Production email links require HTTPS');
   }
   const url = destination.toString();

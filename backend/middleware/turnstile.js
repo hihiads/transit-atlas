@@ -1,14 +1,14 @@
+import { isDev } from '../config/env.js';
 import { getAllowedOrigins, isNativeAppOrigin } from '../config/origins.js';
 
-export const verifyTurnstile = action => async (req, res, next) => {
-  const production = process.env.NODE_ENV === 'production';
+export const verifyTurnstile = (action, { tokenHeader } = {}) => async (req, res, next) => {
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
   if (!secret || /^[123]x0{8}/.test(secret)) {
-    if (!production) return next();
+    if (isDev) return next();
     return res.status(503).json({ error: 'Sigurnosna provjera trenutačno nije dostupna.' });
   }
 
-  const token = req.body?.turnstileToken;
+  const token = tokenHeader ? req.get(tokenHeader) : req.body?.turnstileToken;
 
   if (typeof token !== 'string' || !token || token.length > 2048) {
     return res.status(400).json({ error: 'Turnstile token nedostaje' });
@@ -31,7 +31,7 @@ export const verifyTurnstile = action => async (req, res, next) => {
       .filter(origin => origin.startsWith('https://') && !isNativeAppOrigin(origin))
       .map(origin => new URL(origin).hostname);
     if (!response.ok || data.success !== true || data.action !== action ||
-        (production && !allowedHostnames.includes(data.hostname))) {
+        (!isDev && !allowedHostnames.includes(data.hostname))) {
       return res.status(400).json({ error: 'Turnstile provjera nije uspjela' });
     }
 

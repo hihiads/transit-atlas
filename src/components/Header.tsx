@@ -30,9 +30,11 @@ export default function Header({
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
 
   const openDeleteDialog = () => {
     setDeleteError('');
+    setDeletePassword('');
     setShowDelete(true);
   };
 
@@ -102,7 +104,7 @@ export default function Header({
         <section role="dialog" aria-modal="true" aria-labelledby="delete-account-title" aria-describedby="delete-account-description" onKeyDown={event => {
           if (event.key === 'Escape' && !deleting) setShowDelete(false);
           if (event.key === 'Tab') {
-            const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
+            const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('input:not([disabled]), button:not([disabled])'));
             const first = buttons[0]; const last = buttons[buttons.length - 1];
             if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -110,10 +112,14 @@ export default function Header({
         }} className="w-full max-w-md rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
           <h2 id="delete-account-title" className="text-xl font-bold">{t("Trajno brisanje računa")}</h2>
           <p id="delete-account-description" className="mt-3 text-sm leading-6 text-slate-700">{t("Izbrisat ćemo račun i njegove podatke iz Transitlyja. Omiljene linije i praćeni polasci spremljeni u ovom pregledniku također će se ukloniti. Ovu radnju nije moguće poništiti.")}</p>
+          <label className="mt-4 block text-sm font-medium">{t("Potvrdite lozinku")}
+            <input autoFocus type="password" autoComplete="current-password" maxLength={128} value={deletePassword} disabled={deleting} onChange={event => setDeletePassword(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-400 px-3 py-2" />
+          </label>
+          <p className="mt-2 text-sm text-slate-700">{t("Ako koristite Google, možete ostaviti lozinku praznom i izbrisati račun unutar pet minuta od Google prijave.")}</p>
           {deleteError && <p className="mt-3 text-sm text-red-800" role="alert">{deleteError}</p>}
           <div className="mt-6 flex justify-end gap-3">
-            <button type="button" autoFocus disabled={deleting} onClick={() => setShowDelete(false)} className="rounded-lg border border-slate-400 px-4 py-2 font-semibold text-slate-800 hover:bg-slate-100">{t("Odustani")}</button>
-            <button type="button" disabled={deleting} onClick={async () => { setDeleting(true); try { await deleteAccount(); setShowDelete(false); } catch (error) { setDeleteError(error instanceof Error ? error.message : t("Brisanje nije uspjelo.")); } finally { setDeleting(false); } }} className="rounded-lg bg-red-800 px-4 py-2 font-semibold text-white hover:bg-red-900">{deleting ? t("Brišem…") : t("Trajno izbriši račun")}</button>
+            <button type="button" disabled={deleting} onClick={() => setShowDelete(false)} className="rounded-lg border border-slate-400 px-4 py-2 font-semibold text-slate-800 hover:bg-slate-100">{t("Odustani")}</button>
+            <button type="button" disabled={deleting} onClick={async () => { setDeleting(true); try { await deleteAccount(deletePassword); setDeletePassword(''); setShowDelete(false); } catch (error) { setDeleteError(error instanceof Error ? error.message : t("Brisanje nije uspjelo.")); } finally { setDeleting(false); } }} className="rounded-lg bg-red-800 px-4 py-2 font-semibold text-white hover:bg-red-900">{deleting ? t("Brišem…") : t("Trajno izbriši račun")}</button>
           </div>
         </section>
       </div>}

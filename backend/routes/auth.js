@@ -1,3 +1,4 @@
+import { isDev } from '../config/env.js';
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import User from '../models/User.js';
@@ -10,7 +11,7 @@ import { randomBytes } from 'crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getRuntimeSettings, isAuthenticationEnabled } from '../config/runtimeSettings.js';
 import { isNativeAppOrigin, requireTrustedOrigin } from '../config/origins.js';
-import { asyncRoute, emailActionLimiter, oauthCallbackLimiter, oauthChallengeLimiter } from '../middleware/security.js';
+import { asyncRoute, emailActionLimiter, heavyLimiter, oauthCallbackLimiter, oauthChallengeLimiter } from '../middleware/security.js';
 import { deleteUserSessions } from '../services/authRuntime.js';
 
 const router = express.Router();
@@ -23,7 +24,7 @@ const [loginIpLimiter, loginEmailLimiter] = emailActionLimiter({ maxByIp: 5, max
 function sessionCookieOptions(req) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: !isDev,
     sameSite: isNativeAppOrigin(req.get('origin')) ? 'none' : 'lax'
   };
 }
@@ -69,7 +70,7 @@ async function requestParentConsent({ email, guardianEmail, passwordHash = null,
   }
   return {
     message: registrationMessage,
-    ...(process.env.NODE_ENV !== 'production' ? { parentConsentRequired: true, ...(!sent ? { parentConsentToken: token } : {}) } : {})
+    ...(isDev ? { parentConsentRequired: true, ...(!sent ? { parentConsentToken: token } : {}) } : {})
   };
 }
 
@@ -234,12 +235,14 @@ router.post('/oauth/:provider',
         return res.json({ message: 'Račun je kreiran. Prijava trenutačno nije dostupna.' });
       }
 
+      const googleAuthenticatedAt = Date.now();
       failureStage = 'session creation';
       req.session.regenerate(error => {
         if (error) return res.status(500).json({ error: 'Prijava nije uspjela.' });
         if (isNativeAppOrigin(req.get('origin'))) req.session.cookie.sameSite = 'none';
         req.session.userId = user._id.toString();
         req.session.sessionVersion = user.sessionVersion || 0;
+        req.session.googleAuthenticatedAt = googleAuthenticatedAt;
         req.session.save(saveError => {
           if (saveError) return res.status(500).json({ error: 'Prijava nije uspjela.' });
           res.json({ message: 'Prijavljeni ste.', user: { id: user._id, email: user.email, emailVerified: true } });
@@ -283,6 +286,7 @@ router.post('/register',
 
     try {
       // Provjeri postoji li korisnik (vremenska konzistentnost da bi se spriječila enumeracija)
+      const passwordHash = await hashPassword(password);
       const existingUser = await User.findOne({ email });
 
       if (existingUser) {
@@ -297,7 +301,7 @@ router.post('/register',
           });
           if (result.modifiedCount === 1) {
             const emailSent = await deliverVerification(email, token, emailLanguage(req));
-            if (process.env.NODE_ENV !== 'production' && !emailSent) {
+            if (isDev && !emailSent) {
               return res.status(202).json({ message: registrationMessage, verificationToken: token });
             }
           }
@@ -305,7 +309,6 @@ router.post('/register',
         return res.status(202).json({ message: registrationMessage });
       }
 
-      const passwordHash = await hashPassword(password);
       if (ageRange === '10-15') {
         const result = await requestParentConsent({ email, guardianEmail, passwordHash, language: emailLanguage(req) });
         return res.status(202).json(result);
@@ -330,7 +333,7 @@ router.post('/register',
       const emailSent = await deliverVerification(email, verificationToken, emailLanguage(req));
       res.status(202).json({
         message: registrationMessage,
-        ...(process.env.NODE_ENV !== 'production' && !emailSent ? { verificationToken } : {})
+        ...(isDev && !emailSent ? { verificationToken } : {})
       });
     } catch (error) {
       if (error.code === 11000) return res.status(202).json({ message: registrationMessage });
@@ -453,7 +456,7 @@ router.post('/parent-consent', requireRegistration, actionToken(), body('consent
         throw error;
       }
       await PendingRegistration.deleteOne({ tokenHash });
-      return res.json({ message: sent ? 'Suglasnost je potvrđena. Sada provjerite djetetov email kako biste dovršili registraciju.' : 'Suglasnost je potvrđena. Email djeteta treba potvrditi.', ...(!sent && process.env.NODE_ENV !== 'production' ? { verificationToken } : {}) });
+      return res.json({ message: sent ? 'Suglasnost je potvrđena. Sada provjerite djetetov email kako biste dovršili registraciju.' : 'Suglasnost je potvrđena. Email djeteta treba potvrditi.', ...(!sent && isDev ? { verificationToken } : {}) });
     }
     await PendingRegistration.deleteOne({ tokenHash });
     res.json({ message: 'Suglasnost je potvrđena. Dijete se sada može prijaviti Google računom.' });
@@ -476,10 +479,22 @@ router.post('/parent-consent/preview', requireRegistration, actionToken(), async
 });
 
 // Dohvati trenutnog korisnika
-router.delete('/me', requireAuth, async (req, res, next) => {
+router.delete('/me', requireAuth, heavyLimiter, async (req, res, next) => {
   try {
+    const user = await User.findById(req.session.userId).select("passwordHash googleSubject");
+    if (!user) return res.status(401).json({ error: 'Niste prijavljeni' });
+    const { password } = req.body ?? {};
+    const googleAge = Date.now() - req.session.googleAuthenticatedAt;
+    const recentlySignedInWithGoogle = Boolean(user.googleSubject) && googleAge >= 0 && googleAge < 5 * 60_000;
+    const confirmed = password === undefined || password === ''
+      ? recentlySignedInWithGoogle
+      : typeof password === 'string' && password.length <= 128 && await verifyPassword(password, user.passwordHash);
+    const reauthError = 'Za brisanje potvrdite lozinku ili se ponovno prijavite putem Googlea.';
+    if (!confirmed) return res.status(401).json({ error: reauthError });
+
+    const removed = await User.deleteOne({ _id: user._id, passwordHash: user.passwordHash });
+    if (removed.deletedCount !== 1) return res.status(401).json({ error: reauthError });
     await deleteUserSessions(req.session.userId);
-    await User.findByIdAndDelete(req.session.userId);
     req.session.destroy(error => {
       if (error) return next(error);
       res.clearCookie('sessionId', sessionCookieOptions(req));
@@ -585,7 +600,7 @@ router.post('/forgot-password',
           });
           throw error;
         }
-        if (process.env.NODE_ENV !== 'production' && !emailSent) {
+        if (isDev && !emailSent) {
           return res.json({ message: 'Lokalni SMTP nije postavljen.', resetToken });
         }
       }

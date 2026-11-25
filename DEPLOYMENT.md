@@ -15,7 +15,7 @@ MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/transit-atlas?retryW
 # Security - GENERIRAJTE NOVE VRIJEDNOSTI
 SESSION_SECRET=<generirajte-48-random-znakova>
 PASSWORD_PEPPER=<generirajte-48-random-znakova>
-ADMIN_PANEL_PASSWORD=<duga-nasumična-lozinka>
+ADMIN_PANEL_PASSWORD=<nasumična-lozinka-od-najmanje-24-znaka>
 ADMIN_HOST=admin.transitly.eu
 ADMIN_TOTP_SECRET=<32-nasumicna-Base32-znaka>
 AUTH_LOGIN_ENABLED=true
@@ -70,7 +70,7 @@ Na javnim hostnameovima označite `GET /api/vehicles/zagreb` bez queryja kao *El
 
 U Cloudflare WAF-u dodajte rate limit po IP adresi na `starts_with(http.request.uri.path, "/api/vehicles/")` i uključite brojanje odgovora iz cachea. Uskladite prag s limitom aplikacije od 120 zahtjeva u 60 sekundi, ovisno o razdobljima koja podržava vaš plan. Provjerite da `TRUST_PROXY_HOPS` odgovara Renderovu ulaznom proxyju i da se zahtjevi različitih klijenata broje zasebno. [Cloudflare WAF pravilo za ograničenje zahtjeva](https://developers.cloudflare.com/waf/rate-limiting-rules/create-zone-dashboard/)
 
-Kad su prijava ili registracija uključene, produkcija zahtijeva `MONGODB_URI`, `SESSION_SECRET` i `PASSWORD_PEPPER`. Postavite zasebne tajne od najmanje 32 znaka. Za postojeće račune zadržite pepper s kojim su hashirane njihove lozinke. Postavite točan HTTPS origin aplikacije u `APP_ORIGIN`, HTTPS adresu u `APP_BASE_URL` i SMTP s TLS-om. Za prijavu lozinkom, registraciju i zahtjev za resetiranje lozinke postavite produkcijski Turnstile ključ i tajnu. Turnstile hostname mora biti konfigurirani javni HTTPS host aplikacije. Instalirana aplikacija dohvaća widget s tog hosta, pa na uređajima provjerite novi build prije objave. Stare email poveznice s tokenom u queryju treba zamijeniti novim poveznicama.
+Kad su prijava ili registracija uključene, produkcija zahtijeva `MONGODB_URI`, `SESSION_SECRET` i `PASSWORD_PEPPER`. Postavite zasebne tajne od najmanje 32 znaka. Za postojeće račune zadržite pepper s kojim su hashirane njihove lozinke. Nakon pokretanja provjerite da db.users.getIndexes() prikazuje createdAt TTL indeks od 86400 sekundi s filtrom emailVerified: false. Za Gemini koristite zaseban ključ ograničen na Gemini API i provjerite postavke potrošnje. Postavite točan HTTPS origin aplikacije u `APP_ORIGIN`, HTTPS adresu u `APP_BASE_URL` i SMTP s TLS-om. Za prijavu lozinkom, registraciju i zahtjev za resetiranje lozinke postavite produkcijski Turnstile ključ i tajnu. Turnstile hostname mora biti konfigurirani javni HTTPS host aplikacije. Instalirana aplikacija dohvaća widget s tog hosta, pa na uređajima provjerite novi build prije objave. Stare email poveznice s tokenom u queryju treba zamijeniti novim poveznicama.
 
 ## 🔐 Generiranje sigurnih tajni
 

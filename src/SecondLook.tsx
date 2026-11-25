@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { Upload, X, AlertCircle, CheckCircle, Info, Search } from 'lucide-react';
 import CookieNotice from './components/CookieNotice';
+import { useTurnstile } from './components/Auth/useTurnstile';
+
+const photoTypes = ['image/jpeg', 'image/png', 'image/webp'];
+const maxPhotoBytes = 5 * 1024 * 1024;
 
 interface ListingFormData {
   title: string;
@@ -74,6 +78,7 @@ export default function SecondLook() {
   const [error, setError] = useState<string | null>(null);
   const [showSellerSection, setShowSellerSection] = useState(false);
   const [analysisConsent, setAnalysisConsent] = useState(false);
+  const turnstile = useTurnstile('analyze_photos', { enabled: formData.images.length > 0 });
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -87,11 +92,17 @@ export default function SecondLook() {
   };
 
   const addImages = (files: File[]) => {
-    const newImages = [...formData.images, ...files].slice(0, 8);
+    if (files.some(file => !photoTypes.includes(file.type) || file.size > maxPhotoBytes)) {
+      setError('Use JPEG, PNG or WebP images up to 5 MB each.');
+      return;
+    }
+    const accepted = files.slice(0, 8 - formData.images.length);
+    const newImages = [...formData.images, ...accepted];
+    setError(null);
     setAnalysisConsent(false);
     setFormData({ ...formData, images: newImages });
 
-    files.forEach(file => {
+    accepted.forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreviews(prev => [...prev, reader.result as string].slice(0, 8));
@@ -280,6 +291,7 @@ export default function SecondLook() {
       setError('Prije analize fotografija potvrdite slanje fotografija i opisa Google Gemini API-ju.');
       return;
     }
+    if (formData.images.length > 0 && !turnstile.ready) return;
     setAnalyzing(true);
     setError(null);
 
@@ -296,12 +308,13 @@ export default function SecondLook() {
         formData.images.forEach(img => {
           formDataToSend.append('images', img);
         });
-        formDataToSend.append('title', formData.title);
-        formDataToSend.append('description', formData.description);
-        formDataToSend.append('condition', formData.condition);
+        formDataToSend.append('title', formData.title.slice(0, 300));
+        formDataToSend.append('description', formData.description.slice(0, 300));
+        formDataToSend.append('condition', formData.condition.slice(0, 300));
 
         const response = await fetch('/api/analyze-photos', {
           method: 'POST',
+          headers: { 'X-Turnstile-Token': turnstile.token },
           body: formDataToSend
         });
 
@@ -343,6 +356,7 @@ export default function SecondLook() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
     } finally {
+      if (formData.images.length > 0) turnstile.reset();
       setAnalyzing(false);
     }
   };
@@ -515,7 +529,7 @@ export default function SecondLook() {
                         Drag and drop images, or click to select
                       </p>
                       <p className="text-xs text-gray-500">
-                        PNG, JPG up to 10MB each
+                        JPEG, PNG or WebP, up to 5 MB each
                       </p>
                     </div>
                   ) : (
@@ -551,7 +565,7 @@ export default function SecondLook() {
                   <input
                     id="image-upload"
                     type="file"
-                    accept="image/*"
+                    accept={photoTypes.join(",")}
                     multiple
                     onChange={handleImageUpload}
                     className="hidden"
@@ -654,10 +668,11 @@ export default function SecondLook() {
               <input type="checkbox" checked={analysisConsent} onChange={event => setAnalysisConsent(event.target.checked)} disabled={analyzing} className="mt-1" />
               <span>I agree to send these photos and the listing title, description, and condition to Google Gemini for analysis. <a href="/privacy" className="font-medium text-blue-800 underline">Privacy details</a>.</span>
             </label>}
+            {turnstile.challenge}
             <div className="flex gap-3">
               <button
                 onClick={analyzeSubmit}
-                disabled={analyzing || (!formData.title && !formData.description) || (formData.images.length > 0 && !analysisConsent)}
+                disabled={analyzing || (!formData.title && !formData.description) || (formData.images.length > 0 && (!analysisConsent || !turnstile.ready))}
                 className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
               >
                 {analyzing ? 'Analyzing...' : 'Review Listing'}

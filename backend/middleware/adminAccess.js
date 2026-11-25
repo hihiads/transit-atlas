@@ -1,4 +1,5 @@
-const production = process.env.NODE_ENV === 'production';
+import { isDev } from '../config/env.js';
+const production = !isDev;
 const adminHost = process.env.ADMIN_HOST?.trim().toLowerCase();
 
 function isAdminHost(req) {

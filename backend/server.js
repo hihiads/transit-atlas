@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { hasStrongAdminPassword, isDev } from './config/env.js';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -22,12 +22,11 @@ import { getAllowedOrigins } from './config/origins.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
-const isProduction = process.env.NODE_ENV === 'production';
-const publicUrl = process.env.RENDER_EXTERNAL_URL || (isProduction ? 'https://transit-atlas.onrender.com' : `http://localhost:${PORT}`);
+const publicUrl = process.env.RENDER_EXTERNAL_URL || (!isDev ? 'https://transit-atlas.onrender.com' : `http://localhost:${PORT}`);
 
 await loadRuntimeSettings();
-if (!process.env.ADMIN_PANEL_PASSWORD || process.env.ADMIN_PANEL_PASSWORD.length < 16) {
-  throw new Error('Nedostaje ADMIN_PANEL_PASSWORD ili je kraći od 16 znakova');
+if (!hasStrongAdminPassword()) {
+  throw new Error('ADMIN_PANEL_PASSWORD mora biti jedinstvena nasumična lozinka od 24 do 256 znakova');
 }
 if (isAuthenticationEnabled()) {
   const missing = missingAuthenticationEnvironment();
@@ -36,8 +35,10 @@ if (isAuthenticationEnabled()) {
 }
 
 // Render terminates TLS in front of the app and forwards the client's IP.
-if (isProduction) {
-  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
+if (!isDev) {
+  const proxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 1);
+  if (!Number.isSafeInteger(proxyHops) || proxyHops < 0) throw new Error('Invalid TRUST_PROXY_HOPS');
+  app.set('trust proxy', proxyHops);
 }
 
 const cspDirectives = {
@@ -555,7 +556,7 @@ async function fetchRealtimeVehiclesFromZet() {
   }
 }
 
-app.get('/api/system/status', (req, res) => res.set('Cache-Control', 'no-store').json({ status: 'ok' }));
+app.get(['/api/health', '/api/system/status'], (req, res) => res.set('Cache-Control', 'no-store').json({ status: 'ok' }));
 
 app.get('/api/vehicles/:cityId', (req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -892,13 +893,19 @@ app.get('/api/:cityId/stop/:stopId/departures', asyncRoute(async (req, res) => {
   });
 }));
 
-app.get('/hzpp-api/journey-stops', async (req, res) => {
+const journeyStopsCache = new Map();
+app.get('/hzpp-api/journey-stops', heavyLimiter, asyncRoute(async (req, res) => {
   const { number, start, end, date, departure } = req.query;
   if (typeof number !== 'string' || typeof start !== 'string' || typeof end !== 'string' || typeof date !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      [number, start, end].some(value => !value || value.length > 200) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(date) || (departure !== undefined && (typeof departure !== 'string' || departure.length > 10))) {
     return res.status(400).json({ error: 'Neispravan zahtjev za detalje vlaka.' });
   }
   if (!hzppLoaded && !await loadHzppData()) return res.status(502).json({ error: 'Vozni red HŽPP-a trenutačno nije dostupan.' });
+  const key = JSON.stringify([number, start, end, date, departure]);
+  const cached = journeyStopsCache.get(key);
+  if (cached?.expiresAt > Date.now()) return res.json(cached.result);
+  journeyStopsCache.delete(key);
   const norm = value => String(value || '').toLocaleLowerCase('hr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\bkol\.?(?=\s|$)/g, 'kolodvor').replace(/\s+/g, ' ').trim();
   const [year, month, day] = date.split('-').map(Number);
   const weekday = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
@@ -939,8 +946,11 @@ app.get('/hzpp-api/journey-stops', async (req, res) => {
     matches.push({ stops: routeStops, route, distance: expected === null ? 0 : Math.abs(startDeparture - expected) });
   }
   matches.sort((a, b) => a.distance - b.distance);
-  res.json({ source: 'GTFS raspored', journeys: matches.slice(0, 1).map(({ stops, route }) => ({ stops, route })) });
-});
+  const result = { source: 'GTFS raspored', journeys: matches.slice(0, 1).map(({ stops, route }) => ({ stops, route })) };
+  if (journeyStopsCache.size >= 256) journeyStopsCache.delete(journeyStopsCache.keys().next().value);
+  journeyStopsCache.set(key, { result, expiresAt: Date.now() + 60_000 });
+  res.json(result);
+}));
 
 adminRoutes.get('/system/status', (req, res) => {
   res.json({
@@ -1047,7 +1057,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('═══════════════════════════════════════════════════════════');
   console.log('');
   console.log(`  Server: ${publicUrl}`);
-  console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`  Environment: ${process.env.NODE_ENV || 'unset (restricted)'}`);
   console.log('');
   console.log('  GTFS Izvori:');
   console.log('  • Static:   https://www.zet.hr/gtfs-scheduled/latest');

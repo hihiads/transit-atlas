@@ -58,5 +58,6 @@ const userSchema = new mongoose.Schema({
 
 userSchema.index({ emailVerificationToken: 1 }, { sparse: true });
 userSchema.index({ passwordResetToken: 1 }, { sparse: true });
+userSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400, partialFilterExpression: { emailVerified: false } });
 
 export default mongoose.model('User', userSchema);

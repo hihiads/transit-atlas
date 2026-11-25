@@ -1,3 +1,4 @@
+import { isDev } from './env.js';
 import { mkdir, readFile, rename, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { randomUUID } from 'node:crypto';
@@ -45,14 +46,14 @@ export async function saveRuntimeSettings(next) {
 }
 
 export function missingAuthenticationEnvironment() {
-  const missing = ['MONGODB_URI', 'ADMIN_PANEL_PASSWORD'].filter(key => !process.env[key]);
-  if (process.env.NODE_ENV === 'production') {
+  const missing = ['MONGODB_URI', 'ADMIN_PANEL_PASSWORD', 'SESSION_SECRET'].filter(key => !process.env[key]);
+  if (!isDev) {
     const secrets = ['SESSION_SECRET', 'PASSWORD_PEPPER'];
     for (const key of secrets) {
       const value = process.env[key];
       if (!value || value.length < 32 || value.startsWith('replace-with-') ||
           value === process.env.ADMIN_PANEL_PASSWORD || secrets.some(other => other !== key && value === process.env[other])) {
-        missing.push(key);
+        if (!missing.includes(key)) missing.push(key);
       }
     }
   }
