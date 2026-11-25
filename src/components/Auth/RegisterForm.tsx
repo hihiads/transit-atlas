@@ -1,3 +1,4 @@
+import { language, t } from '../../services/i18n';
 import { useState, FormEvent, useEffect, useRef } from 'react';
 import { AuthResponse, register, RegistrationConsent, SignedInUser } from '../../services/auth';
 import SocialAuthButtons from './SocialAuthButtons';
@@ -15,6 +16,7 @@ declare global {
       render: (element: HTMLElement, options: {
         sitekey: string;
         action: string;
+        language?: 'hr' | 'en';
         callback: (token: string) => void;
         'error-callback': () => void;
         theme?: 'light' | 'dark';
@@ -53,9 +55,10 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
         widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
           sitekey: turnstileSiteKey,
           action: 'register',
+          language,
           callback: (token: string) => setTurnstileToken(token),
           'error-callback': () => {
-            setError('Turnstile provjera nije uspjela');
+            setError(t("Turnstile provjera nije uspjela"));
             setTurnstileToken(null);
           },
           theme: 'light'
@@ -78,12 +81,12 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
     setSuccess(null);
 
     if (password !== confirmPassword) {
-      setError('Lozinke se ne podudaraju');
+      setError(t("Lozinke se ne podudaraju"));
       return;
     }
 
     if (!turnstileToken && !turnstileOptional) {
-      setError('Molimo pričekajte Turnstile provjeru');
+      setError(t("Molimo pričekajte Turnstile provjeru"));
       return;
     }
 
@@ -102,7 +105,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
 
       onSuccess(response);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Greška pri registraciji');
+      setError(err instanceof Error ? err.message : t("Greška pri registraciji"));
 
       // Reset Turnstile
       if (window.turnstile && widgetIdRef.current) {
@@ -116,7 +119,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
 
   return (
     <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-6 text-center text-primary">Registracija</h2>
+      <h2 className="text-2xl font-bold mb-6 text-center text-primary">{t("Registracija")}</h2>
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
@@ -148,32 +151,30 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
         </div>
 
         <fieldset className="space-y-2 rounded-lg border border-gray-300 p-3">
-          <legend className="px-1 text-sm font-semibold text-gray-800">Dobna skupina</legend>
+          <legend className="px-1 text-sm font-semibold text-gray-800">{t("Dobna skupina")}</legend>
           <label className="flex items-start gap-2 text-sm text-gray-800">
             <input type="radio" name="ageRange" value="16+" required checked={ageRange === '16+'} onChange={() => setAgeRange('16+')} disabled={loading} />
-            <span>Imam 16 ili više godina.</span>
+            <span>{t("Imam 16 ili više godina.")}</span>
           </label>
           <label className="flex items-start gap-2 text-sm text-gray-800">
             <input type="radio" name="ageRange" value="10-15" required checked={ageRange === '10-15'} onChange={() => setAgeRange('10-15')} disabled={loading} />
-            <span>Imam od 10 do 15 godina.</span>
+            <span>{t("Imam od 10 do 15 godina.")}</span>
           </label>
         </fieldset>
 
         {ageRange === '10-15' && <div>
-          <label htmlFor="guardianEmail" className="mb-1 block text-sm font-medium text-gray-800">Email roditelja ili skrbnika</label>
+          <label htmlFor="guardianEmail" className="mb-1 block text-sm font-medium text-gray-800">{t("Email roditelja ili skrbnika")}</label>
           <input id="guardianEmail" type="email" autoComplete="email" value={guardianEmail} onChange={event => setGuardianEmail(event.target.value)} required maxLength={255} disabled={loading} className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary" />
-          <p className="mt-1 text-xs leading-5 text-gray-700">Račun se neće otvoriti dok roditelj ili skrbnik ne potvrdi suglasnost putem emaila. Nepotvrđeni zahtjev briše se nakon 7 dana.</p>
+          <p className="mt-1 text-xs leading-5 text-gray-700">{t("Račun se neće otvoriti dok roditelj ili skrbnik ne potvrdi suglasnost putem emaila. Nepotvrđeni zahtjev briše se nakon 7 dana.")}</p>
         </div>}
 
         <label className="flex items-start gap-2 text-sm leading-5 text-gray-800">
           <input type="checkbox" checked={termsAccepted} onChange={event => setTermsAccepted(event.target.checked)} required disabled={loading} className="mt-1" />
-          <span>Prihvaćam <a href="/terms" target="_blank" rel="noreferrer" className="font-medium text-blue-800 underline">Uvjeti korištenja</a> i potvrđujem da sam pročitao/la <a href="/privacy" target="_blank" rel="noreferrer" className="font-medium text-blue-800 underline">Politiku privatnosti</a>.</span>
+          <span>{t("Prihvaćam") + " "}<a href="/terms" target="_blank" rel="noreferrer" className="font-medium text-blue-800 underline">{t("Uvjeti korištenja")}</a>{" " + t("i potvrđujem da sam pročitao/la") + " "}<a href="/privacy" target="_blank" rel="noreferrer" className="font-medium text-blue-800 underline">{t("Politiku privatnosti")}</a>.</span>
         </label>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-            Lozinka (najmanje 8 znakova)
-          </label>
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">{t("Lozinka (najmanje 8 znakova)")}</label>
           <input
             id="password"
             type="password"
@@ -188,9 +189,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-            Potvrdi lozinku
-          </label>
+          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">{t("Potvrdi lozinku")}</label>
           <input
             id="confirmPassword"
             type="password"
@@ -205,7 +204,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
         </div>
 
         {turnstileSiteKey ? <div ref={turnstileRef} className="flex justify-center"></div> : turnstileOptional ? null : (
-          <p className="text-sm text-red-700" role="alert">Registracija trenutačno nije konfigurirana. Administrator treba postaviti Cloudflare Turnstile ključeve.</p>
+          <p className="text-sm text-red-700" role="alert">{t("Registracija trenutačno nije konfigurirana. Administrator treba postaviti Cloudflare Turnstile ključeve.")}</p>
         )}
 
         <button
@@ -213,21 +212,18 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
           disabled={loading || (!turnstileToken && !turnstileOptional)}
           className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
-          {loading ? 'Registracija...' : 'Registriraj se'}
+          {loading ? t("Registracija...") : t("Registriraj se")}
         </button>
       </form>
 
       <SocialAuthButtons onSuccess={onSocialSuccess} intent="register" consent={{ termsAccepted, ageRange, guardianEmail }} />
 
-      {allowLogin && <div className="mt-6 text-center text-sm text-gray-600">
-        Već imate račun?{' '}
+      {allowLogin && <div className="mt-6 text-center text-sm text-gray-600">{t("Već imate račun?")}{' '}
         <button
           onClick={onSwitchToLogin}
           className="text-primary hover:underline font-medium"
           disabled={loading}
-        >
-          Prijavite se
-        </button>
+        >{t("Prijavite se")}</button>
       </div>}
     </div>
   );

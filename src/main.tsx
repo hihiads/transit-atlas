@@ -6,8 +6,11 @@ import AdminPanel from './components/AdminPanel';
 import LegalPage from './components/LegalPage';
 import ParentConsentPage from './components/ParentConsentPage';
 import AccountDeletionPage from './components/AccountDeletionPage';
+import { localizeDocument } from './services/i18n';
 import './index.css';
 import 'leaflet/dist/leaflet.css';
+
+localizeDocument();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

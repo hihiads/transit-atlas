@@ -25,7 +25,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Transitly koristi lokaciju samo kada zatražite najbližu stanicu ili svoju lokaciju na karti.</string>
+	<string>Transitly uses your location only when you ask to find the nearest stop or show your location on the map.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

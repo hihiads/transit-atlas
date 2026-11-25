@@ -1,5 +1,6 @@
+import { relativeUpdateTime, t } from '../services/i18n';
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker, Polyline, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { Vehicle, Stop, TransitShape } from '../types';
 
@@ -68,30 +69,22 @@ export default function MapView({
   onVehicleClick,
   onStopClick,
 }: MapViewProps) {
-  const formatLastUpdate = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `prije ${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `prije ${minutes}min`;
-    const hours = Math.floor(minutes / 60);
-    return `prije ${hours}h`;
-  };
-
   return (
-    <div role="region" aria-label="Interaktivna karta javnog prijevoza. Koristite kontrole za zumiranje i pomicanje karte." className="h-full w-full">
+    <div role="region" aria-label={t("Interaktivna karta javnog prijevoza. Koristite kontrole za zumiranje i pomicanje karte.")} className="h-full w-full">
     <MapContainer
       center={center}
       zoom={zoom}
       className="w-full h-full"
-      zoomControl={true}
+      zoomControl={false}
     >
+      <ZoomControl zoomInTitle={t("Povećaj kartu")} zoomOutTitle={t("Smanji kartu")} />
       <MapController center={center} zoom={zoom} />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      {userLocation && <CircleMarker center={userLocation} radius={8} pathOptions={{ color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }}><Popup>Vaša lokacija</Popup></CircleMarker>}
+      {userLocation && <CircleMarker center={userLocation} radius={8} pathOptions={{ color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }}><Popup>{t("Vaša lokacija")}</Popup></CircleMarker>}
 
       {showShapes && shapes.map(shape => shape.coordinates.length > 1 && (
         <Polyline
@@ -119,7 +112,7 @@ export default function MapView({
               const path = event.target.getElement() as SVGElement;
               path.setAttribute('tabindex', '0');
               path.setAttribute('role', 'button');
-              path.setAttribute('aria-label', `Otvori stajalište ${stop.name}`);
+              path.setAttribute('aria-label', t("Otvori stajalište {0}", stop.name));
               path.addEventListener('keydown', (keyEvent) => {
                 if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
                   keyEvent.preventDefault();
@@ -132,12 +125,12 @@ export default function MapView({
           <Popup>
             <div className="p-2">
               <div className="font-bold text-sm">{stop.name}</div>
-              <div className="text-xs text-gray-500">Stanica ZET-a</div>
+              <div className="text-xs text-gray-500">{t("Stanica ZET-a")}</div>
               {stop.code && (
-                <div className="text-xs text-gray-500">Kod: {stop.code}</div>
+                <div className="text-xs text-gray-500">{t("Kod:") + " "}{stop.code}</div>
               )}
               {stop.wheelchairAccessible && (
-                <div className="text-xs text-green-600 mt-1">♿ Pristupačno</div>
+                <div className="text-xs text-green-600 mt-1">{t("♿ Pristupačno")}</div>
               )}
             </div>
           </Popup>
@@ -150,24 +143,23 @@ export default function MapView({
           key={vehicle.id}
           position={[vehicle.lat, vehicle.lon]}
           icon={vehicle.type === 'bus' ? busIcon : vehicle.type === 'tram' ? tramIcon : unknownIcon}
-          title={`${vehicle.type === 'tram' ? 'Tramvaj' : vehicle.type === 'bus' ? 'Autobus' : 'Vozilo'} linije ${vehicle.line}, smjer ${vehicle.direction}`}
-          alt={`${vehicle.type === 'tram' ? 'Tramvaj' : vehicle.type === 'bus' ? 'Autobus' : 'Vozilo'} linije ${vehicle.line}`}
+          title={`${vehicle.type === 'tram' ? t("Tramvaj") : vehicle.type === 'bus' ? t("Autobus") : t("Vozilo")} linije ${vehicle.line}, smjer ${vehicle.direction}`}
+          alt={`${vehicle.type === 'tram' ? t("Tramvaj") : vehicle.type === 'bus' ? t("Autobus") : t("Vozilo")} linije ${vehicle.line}`}
           eventHandlers={{
             click: () => onVehicleClick(vehicle)
           }}
         >
           <Popup>
             <div className="p-2">
-              <div className="font-bold text-lg">Linija {vehicle.line}</div>
-              <div className="text-xs font-medium text-gray-500">{vehicle.type === 'tram' ? 'Tramvaj' : vehicle.type === 'bus' ? 'Autobus' : 'Tip vozila nije dostupan'}</div>
+              <div className="font-bold text-lg">{t("Linija") + " "}{vehicle.line}</div>
+              <div className="text-xs font-medium text-gray-500">{vehicle.type === 'tram' ? t("Tramvaj") : vehicle.type === 'bus' ? t("Autobus") : t("Tip vozila nije dostupan")}</div>
               <div className="text-sm text-gray-600">{vehicle.direction}</div>
               {vehicle.garageNumber && (
-                <div className="text-xs text-gray-500 mt-1">
-                  Vozilo: {vehicle.garageNumber}
+                <div className="text-xs text-gray-500 mt-1">{t("Vozilo:") + " "}{vehicle.garageNumber}
                 </div>
               )}
               <div className="text-xs text-gray-600 mt-1">
-                {formatLastUpdate(vehicle.lastUpdate)}
+                {relativeUpdateTime(vehicle.lastUpdate)}
               </div>
             </div>
           </Popup>

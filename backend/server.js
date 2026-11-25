@@ -1012,7 +1012,7 @@ app.get('/', (req, res) => {
   }
   res.sendFile(indexPath);
 });
-app.get(['/verify-email', '/reset-password', '/confirm-parent', '/privacy', '/terms', '/cookies'], (req, res) => {
+app.get(['/verify-email', '/reset-password', '/confirm-parent', '/privacy', '/terms', '/cookies', '/delete-account'], (req, res) => {
   const indexPath = join(frontendDist, 'index.html');
   if (!existsSync(indexPath)) return res.status(503).send('Frontend nije izgrađen. Pokrenite npm run build.');
   if (['/verify-email', '/reset-password', '/confirm-parent'].includes(req.path.replace(/\/$/, '').toLowerCase())) {

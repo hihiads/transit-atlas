@@ -27,9 +27,14 @@ function sessionCookieOptions(req) {
   };
 }
 
-async function deliverVerification(email, token) {
+function emailLanguage(req) {
+  const preferred = req.get('accept-language')?.split(',')[0].trim();
+  return preferred && !/^hr(?:[-;]|$)/i.test(preferred) ? 'en' : 'hr';
+}
+
+async function deliverVerification(email, token, language) {
   try {
-    return await sendVerificationEmail(email, token);
+    return await sendVerificationEmail(email, token, language);
   } catch (error) {
     await User.updateOne({ email, emailVerificationToken: hashToken(token) }, {
       $set: { emailVerificationToken: null, emailVerificationExpires: null }
@@ -38,7 +43,7 @@ async function deliverVerification(email, token) {
   }
 }
 
-async function requestParentConsent({ email, guardianEmail, passwordHash = null, googleSubject = null }) {
+async function requestParentConsent({ email, guardianEmail, passwordHash = null, googleSubject = null, language }) {
   const token = generateToken();
   const tokenHash = hashToken(token);
   try {
@@ -56,7 +61,7 @@ async function requestParentConsent({ email, guardianEmail, passwordHash = null,
   }
   let sent;
   try {
-    sent = await sendParentalConsentEmail(guardianEmail, token);
+    sent = await sendParentalConsentEmail(guardianEmail, token, language);
   } catch (error) {
     await PendingRegistration.deleteOne({ email, tokenHash });
     throw error;
@@ -208,7 +213,7 @@ router.post('/oauth/:provider',
           return res.status(403).json({ error: 'Za ovu adresu registrirajte se emailom i potvrdite poveznicu iz sandučića.' });
         }
         if (ageRange === '10-15') {
-          const result = await requestParentConsent({ email, guardianEmail, googleSubject: claims.sub });
+          const result = await requestParentConsent({ email, guardianEmail, googleSubject: claims.sub, language: emailLanguage(req) });
           return res.json(result);
         }
         if (ageRange !== '16+' || !termsAccepted) return res.status(400).json({ error: 'Registracija nije dovršena. Prihvatite uvjete i odaberite dobnu skupinu.' });
@@ -290,7 +295,7 @@ router.post('/register',
             $set: { emailVerificationToken: hashToken(token), emailVerificationExpires: new Date(Date.now() + verificationLifetime) }
           });
           if (result.modifiedCount === 1) {
-            const emailSent = await deliverVerification(email, token);
+            const emailSent = await deliverVerification(email, token, emailLanguage(req));
             if (process.env.NODE_ENV !== 'production' && !emailSent) {
               return res.status(202).json({ message: registrationMessage, verificationToken: token });
             }
@@ -301,7 +306,7 @@ router.post('/register',
 
       const passwordHash = await hashPassword(password);
       if (ageRange === '10-15') {
-        const result = await requestParentConsent({ email, guardianEmail, passwordHash });
+        const result = await requestParentConsent({ email, guardianEmail, passwordHash, language: emailLanguage(req) });
         return res.status(202).json(result);
       }
 
@@ -321,7 +326,7 @@ router.post('/register',
 
       await user.save();
 
-      const emailSent = await deliverVerification(email, verificationToken);
+      const emailSent = await deliverVerification(email, verificationToken, emailLanguage(req));
       res.status(202).json({
         message: registrationMessage,
         ...(process.env.NODE_ENV !== 'production' && !emailSent ? { verificationToken } : {})
@@ -439,7 +444,7 @@ router.post('/parent-consent', requireRegistration, actionToken(), body('consent
     if (verificationToken) {
       let sent;
       try {
-        sent = await sendVerificationEmail(user.email, verificationToken);
+        sent = await sendVerificationEmail(user.email, verificationToken, emailLanguage(req));
       } catch (error) {
         await user.deleteOne();
         throw error;
@@ -569,7 +574,7 @@ router.post('/forgot-password',
       if (user) {
         let emailSent;
         try {
-          emailSent = await sendPasswordResetEmail(email, resetToken);
+          emailSent = await sendPasswordResetEmail(email, resetToken, emailLanguage(req));
         } catch (error) {
           await User.updateOne({ _id: user._id, passwordResetToken: hashedToken }, {
             $set: { passwordResetToken: null, passwordResetExpires: null }

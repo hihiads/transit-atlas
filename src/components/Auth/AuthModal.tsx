@@ -1,3 +1,4 @@
+import { t } from '../../services/i18n';
 import { useState } from 'react';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
@@ -19,8 +20,8 @@ export default function AuthModal({ onClose, loginEnabled, registrationEnabled }
   const [verificationToken, setVerificationToken] = useState(actionLinkToken);
   const [verificationPassword, setVerificationPassword] = useState('');
   const [verifying, setVerifying] = useState(false);
-  const [verificationMessage, setVerificationMessage] = useState('Unesite lozinku koju ste odabrali pri registraciji.');
-  const [parentMessage, setParentMessage] = useState('Provjerite email roditelja ili skrbnika kako bi potvrdio suglasnost.');
+  const [verificationMessage, setVerificationMessage] = useState(t("Unesite lozinku koju ste odabrali pri registraciji."));
+  const [parentMessage, setParentMessage] = useState(t("Provjerite email roditelja ili skrbnika kako bi potvrdio suglasnost."));
   const { login } = useAuth();
 
   async function handleSuccess(user?: SignedInUser) {
@@ -30,7 +31,7 @@ export default function AuthModal({ onClose, loginEnabled, registrationEnabled }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[2000] p-4">
-      <div role="dialog" aria-modal="true" aria-label="Prijava ili registracija u Transitly" onKeyDown={event => {
+      <div role="dialog" aria-modal="true" aria-label={t("Prijava ili registracija u Transitly")} onKeyDown={event => {
         if (event.key === 'Escape') onClose();
         if (event.key === 'Tab') {
           const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled])'));
@@ -42,7 +43,7 @@ export default function AuthModal({ onClose, loginEnabled, registrationEnabled }
         <button
           type="button"
           autoFocus
-          aria-label="Zatvori prozor za prijavu"
+          aria-label={t("Zatvori prozor za prijavu")}
           onClick={onClose}
           className="absolute top-2 right-2 z-10 text-gray-600 hover:text-gray-600 transition-colors bg-white rounded-full p-2"
         >
@@ -88,30 +89,28 @@ export default function AuthModal({ onClose, loginEnabled, registrationEnabled }
               window.history.replaceState({}, '', '/');
               setView(loginEnabled ? 'login' : 'register');
             } catch (error) {
-              setVerificationMessage(error instanceof Error ? error.message : 'Potvrda nije uspjela.');
+              setVerificationMessage(error instanceof Error ? error.message : t("Potvrda nije uspjela."));
             } finally {
               setVerifying(false);
             }
           }}>
-            <h2 className="text-2xl font-bold mb-4 text-center text-primary">Potvrda emaila</h2>
+            <h2 className="text-2xl font-bold mb-4 text-center text-primary">{t("Potvrda emaila")}</h2>
             <p className="mb-4 text-sm text-gray-700" aria-live="polite">{verificationMessage}</p>
-            <label className="mb-4 block text-sm font-medium">
-              Lozinka
-              <input type="password" autoComplete="current-password" required maxLength={128}
+            <label className="mb-4 block text-sm font-medium">{t("Lozinka")}<input type="password" autoComplete="current-password" required maxLength={128}
                 value={verificationPassword} onChange={event => setVerificationPassword(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-400 px-3 py-2" />
             </label>
             <button type="submit" disabled={verifying || !verificationToken} className="w-full bg-primary text-white py-2 px-4 rounded-lg disabled:opacity-50">
-              {verifying ? 'Potvrđujem…' : 'Potvrdi email'}
+              {verifying ? t("Potvrđujem…") : t("Potvrdi email")}
             </button>
           </form>
         )}
 
         {view === 'parent-consent' && <div className="w-full max-w-md mx-auto space-y-4 rounded-lg bg-white p-6 shadow-lg">
-          <h2 className="text-2xl font-bold text-center text-primary">Čeka se roditeljska suglasnost</h2>
+          <h2 className="text-2xl font-bold text-center text-primary">{t("Čeka se roditeljska suglasnost")}</h2>
           <p className="text-sm leading-6 text-gray-800">{parentMessage}</p>
-          {verificationToken && <a className="block break-all rounded-lg bg-blue-50 p-3 text-sm font-medium text-blue-900 underline" href={`/confirm-parent#token=${encodeURIComponent(verificationToken)}`}>Otvori lokalnu poveznicu za potvrdu</a>}
-          <button type="button" onClick={onClose} className="w-full rounded-lg border border-slate-400 px-4 py-2 font-semibold text-slate-800 hover:bg-slate-100">Zatvori</button>
+          {verificationToken && <a className="block break-all rounded-lg bg-blue-50 p-3 text-sm font-medium text-blue-900 underline" href={`/confirm-parent#token=${encodeURIComponent(verificationToken)}`}>{t("Otvori lokalnu poveznicu za potvrdu")}</a>}
+          <button type="button" onClick={onClose} className="w-full rounded-lg border border-slate-400 px-4 py-2 font-semibold text-slate-800 hover:bg-slate-100">{t("Zatvori")}</button>
         </div>}
 
         {view === 'reset-password' && (
@@ -140,14 +139,13 @@ function ResetPasswordForm({ token, onDone }: { token: string; onDone: () => voi
       window.history.replaceState({}, '', '/');
       setTimeout(onDone, 1200);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Promjena lozinke nije uspjela.');
+      setMessage(error instanceof Error ? error.message : t("Promjena lozinke nije uspjela."));
     }
   }}>
-    <h2 className="text-2xl font-bold text-center text-primary">Nova lozinka</h2>
-    <label className="block text-sm font-medium text-gray-700">Lozinka
-      <input className="mt-1 w-full px-3 py-2 border rounded-lg" type="password" minLength={8} maxLength={128} required value={password} onChange={(event) => setPassword(event.target.value)} />
+    <h2 className="text-2xl font-bold text-center text-primary">{t("Nova lozinka")}</h2>
+    <label className="block text-sm font-medium text-gray-700">{t("Lozinka")}<input className="mt-1 w-full px-3 py-2 border rounded-lg" type="password" minLength={8} maxLength={128} required value={password} onChange={(event) => setPassword(event.target.value)} />
     </label>
     {message && <p className="text-sm text-gray-700" role="status">{message}</p>}
-    <button className="w-full bg-primary text-white py-2 px-4 rounded-lg">Spremi novu lozinku</button>
+    <button className="w-full bg-primary text-white py-2 px-4 rounded-lg">{t("Spremi novu lozinku")}</button>
   </form>;
 }

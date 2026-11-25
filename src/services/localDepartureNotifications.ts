@@ -1,3 +1,4 @@
+import { locale, t } from './i18n';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
@@ -21,8 +22,8 @@ export async function requestDepartureNotificationPermission() {
   if (permission.display === 'granted' && Capacitor.getPlatform() === 'android') {
     await LocalNotifications.createChannel({
       id: 'transitly-departures',
-      name: 'Podsjetnici za polaske',
-      description: 'Podsjetnici za polaske koje pratite',
+      name: t("Podsjetnici za polaske"),
+      description: t("Podsjetnici za polaske koje pratite"),
       importance: 4,
       visibility: 1
     });
@@ -40,8 +41,8 @@ export async function scheduleDepartureReminders(key: string, timestamp: number,
   if (timestamp - 10 * 60_000 > now) {
     notifications.push({
       id: tenMinuteId,
-      title: 'Polazak za 10 minuta',
-      body: `${label} polazi u ${new Date(timestamp).toLocaleTimeString('hr-HR', { hour: '2-digit', minute: '2-digit' })}.`,
+      title: t("Polazak za 10 minuta"),
+      body: t("{0} polazi u {1}.", label, new Date(timestamp).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })),
       schedule: { at: new Date(timestamp - 10 * 60_000), allowWhileIdle: true, isExactNotification: false },
       channelId: 'transitly-departures'
     });
@@ -49,8 +50,8 @@ export async function scheduleDepartureReminders(key: string, timestamp: number,
   if (timestamp > now) {
     notifications.push({
       id: departureId,
-      title: 'Vrijeme polaska',
-      body: `${label} polazi sada.`,
+      title: t("Vrijeme polaska"),
+      body: t("{0} polazi sada.", label),
       schedule: { at: new Date(timestamp), allowWhileIdle: true, isExactNotification: false },
       channelId: 'transitly-departures'
     });

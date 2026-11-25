@@ -1,3 +1,4 @@
+import { t } from '../services/i18n';
 import { useEffect, useState } from 'react';
 import { Vehicle, VehicleProfile } from '../types';
 import { api } from '../api';
@@ -8,10 +9,10 @@ interface VehicleProfileModalProps {
 }
 
 const stopLabels = {
-  passed: 'Prošao',
-  current: 'Na stanici',
-  upcoming: 'Dolazi',
-  unknown: 'Status nije dostupan'
+  passed: t("Prošao"),
+  current: t("Na stanici"),
+  upcoming: t("Dolazi"),
+  unknown: t("Status nije dostupan")
 };
 
 export default function VehicleProfileModal({ vehicle, onClose }: VehicleProfileModalProps) {
@@ -43,7 +44,7 @@ export default function VehicleProfileModal({ vehicle, onClose }: VehicleProfile
   }, [vehicle.id]);
 
   const details = profile ?? vehicle;
-  const typeLabel = details.type === 'bus' ? 'Autobus' : details.type === 'tram' ? 'Tramvaj' : 'Vozilo';
+  const typeLabel = details.type === 'bus' ? t("Autobus") : details.type === 'tram' ? t("Tramvaj") : t("Vozilo");
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-end justify-center bg-slate-950/60 p-0 sm:items-center sm:p-4">
@@ -61,24 +62,22 @@ export default function VehicleProfileModal({ vehicle, onClose }: VehicleProfile
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
             <p className="text-sm text-slate-600">{typeLabel}{details.garageNumber && ` · ${details.garageNumber}`}</p>
-            <h2 id="vehicle-profile-title" className="text-xl font-bold">Linija {details.line}</h2>
+            <h2 id="vehicle-profile-title" className="text-xl font-bold">{t("Linija") + " "}{details.line}</h2>
             <p className="text-sm text-slate-600">{details.direction}</p>
           </div>
-          <button type="button" autoFocus onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium">
-            Zatvori
-          </button>
+          <button type="button" autoFocus onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium">{t("Zatvori")}</button>
         </header>
 
         <div className="min-h-0 overflow-y-auto px-5 py-4">
-          <h3 className="mb-3 text-base font-semibold">Stanice na ovoj vožnji</h3>
+          <h3 className="mb-3 text-base font-semibold">{t("Stanice na ovoj vožnji")}</h3>
           {error && <p role="status" className="mb-3 text-sm text-slate-600">
-            {profile ? 'Osvježavanje nije uspjelo. Prikazani su zadnji dostupni podaci.' : 'Stanice trenutačno nije moguće učitati.'}
+            {profile ? t("Osvježavanje nije uspjelo. Prikazani su zadnji dostupni podaci.") : t("Stanice trenutačno nije moguće učitati.")}
           </p>}
-          {!profile && !error && <p role="status" className="text-sm text-slate-600">Učitavanje stanica…</p>}
-          {profile && profile.stops.length === 0 && <p className="text-sm text-slate-600">Vozni red za ovu vožnju nije dostupan.</p>}
-          {profile?.progressSource === 'estimated' && <p className="mb-3 text-xs text-slate-600">Prolazak kroz stanice procijenjen je prema GPS položaju vozila.</p>}
+          {!profile && !error && <p role="status" className="text-sm text-slate-600">{t("Učitavanje stanica…")}</p>}
+          {profile && profile.stops.length === 0 && <p className="text-sm text-slate-600">{t("Vozni red za ovu vožnju nije dostupan.")}</p>}
+          {profile?.progressSource === 'estimated' && <p className="mb-3 text-xs text-slate-600">{t("Prolazak kroz stanice procijenjen je prema GPS položaju vozila.")}</p>}
           {profile && profile.stops.length > 0 && (
-            <ol tabIndex={0} aria-label="Redoslijed stanica"
+            <ol tabIndex={0} aria-label={t("Redoslijed stanica")}
               className="outline-offset-2">
               {profile.stops.map(stop => (
                 <li key={JSON.stringify([stop.sequence, stop.id])}

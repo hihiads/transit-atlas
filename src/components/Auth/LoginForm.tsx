@@ -1,3 +1,4 @@
+import { t } from '../../services/i18n';
 import { useState, FormEvent } from 'react';
 import { login, SignedInUser } from '../../services/auth';
 import SocialAuthButtons from './SocialAuthButtons';
@@ -25,7 +26,7 @@ export default function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToFor
       await login(email, password);
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Greška pri prijavi');
+      setError(err instanceof Error ? err.message : t("Greška pri prijavi"));
     } finally {
       setLoading(false);
     }
@@ -33,8 +34,8 @@ export default function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToFor
 
   return (
     <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-6 text-center text-primary">Prijava</h2>
-      {isNativeApp() && <p className="mb-4 rounded-lg bg-slate-50 p-3 text-sm leading-5 text-slate-700">Google prijava nije dostupna u ovoj aplikaciji. Ako ste se prije prijavljivali Googleom, odaberite „Zaboravili ste lozinku?” da postavite lozinku za isti email.</p>}
+      <h2 className="text-2xl font-bold mb-6 text-center text-primary">{t("Prijava")}</h2>
+      {isNativeApp() && <p className="mb-4 rounded-lg bg-slate-50 p-3 text-sm leading-5 text-slate-700">{t("Google prijava nije dostupna u ovoj aplikaciji. Ako ste se prije prijavljivali Googleom, odaberite „Zaboravili ste lozinku?” da postavite lozinku za isti email.")}</p>}
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
@@ -60,9 +61,7 @@ export default function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToFor
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-            Lozinka
-          </label>
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">{t("Lozinka")}</label>
           <input
             id="password"
             type="password"
@@ -81,30 +80,25 @@ export default function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToFor
           onClick={onSwitchToForgotPassword}
           className="text-sm text-primary hover:underline"
           disabled={loading}
-        >
-          Zaboravili ste lozinku?
-        </button>
+        >{t("Zaboravili ste lozinku?")}</button>
 
         <button
           type="submit"
           disabled={loading}
           className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
-          {loading ? 'Prijava...' : 'Prijavi se'}
+          {loading ? t("Prijava...") : t("Prijavi se")}
         </button>
       </form>
 
       <SocialAuthButtons onSuccess={onSuccess} intent="login" />
 
-      {allowRegister && <div className="mt-6 text-center text-sm text-gray-600">
-        Nemate račun?{' '}
+      {allowRegister && <div className="mt-6 text-center text-sm text-gray-600">{t("Nemate račun?")}{' '}
         <button
           onClick={onSwitchToRegister}
           className="text-primary hover:underline font-medium"
           disabled={loading}
-        >
-          Registrirajte se
-        </button>
+        >{t("Registrirajte se")}</button>
       </div>}
     </div>
   );

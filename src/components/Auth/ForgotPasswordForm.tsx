@@ -1,3 +1,4 @@
+import { language, t } from '../../services/i18n';
 import { useState, FormEvent, useEffect, useRef } from 'react';
 import { forgotPassword } from '../../services/auth';
 
@@ -12,6 +13,7 @@ declare global {
       render: (element: HTMLElement, options: {
         sitekey: string;
         action: string;
+        language?: 'hr' | 'en';
         callback: (token: string) => void;
         'error-callback': () => void;
         theme?: 'light' | 'dark';
@@ -44,9 +46,10 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
         widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
           sitekey: siteKey,
           action: 'forgot_password',
+          language,
           callback: (token: string) => setTurnstileToken(token),
           'error-callback': () => {
-            setError('Turnstile provjera nije uspjela');
+            setError(t("Turnstile provjera nije uspjela"));
             setTurnstileToken(null);
           },
           theme: 'light'
@@ -69,7 +72,7 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
     setSuccess(null);
 
     if (!turnstileToken) {
-      setError('Molimo pričekajte Turnstile provjeru');
+      setError(t("Molimo pričekajte Turnstile provjeru"));
       return;
     }
 
@@ -89,7 +92,7 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
         onSuccess();
       }, 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Greška pri zahtjevu');
+      setError(err instanceof Error ? err.message : t("Greška pri zahtjevu"));
 
       // Reset Turnstile
       if (window.turnstile && widgetIdRef.current) {
@@ -103,7 +106,7 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
 
   return (
     <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-6 text-center text-primary">Resetiranje lozinke</h2>
+      <h2 className="text-2xl font-bold mb-6 text-center text-primary">{t("Resetiranje lozinke")}</h2>
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
@@ -119,9 +122,7 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            Email adresa
-          </label>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">{t("Email adresa")}</label>
           <input
             id="email"
             type="email"
@@ -132,9 +133,7 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             disabled={loading}
           />
-          <p className="mt-1 text-xs text-gray-500">
-            Poslat će vam se email s uputama za resetiranje lozinke.
-          </p>
+          <p className="mt-1 text-xs text-gray-500">{t("Poslat će vam se email s uputama za resetiranje lozinke.")}</p>
         </div>
 
         <div ref={turnstileRef} className="flex justify-center"></div>
@@ -144,7 +143,7 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
           disabled={loading || !turnstileToken}
           className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
-          {loading ? 'Slanje...' : 'Pošalji upute'}
+          {loading ? t("Slanje...") : t("Pošalji upute")}
         </button>
       </form>
 
@@ -153,9 +152,7 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
           onClick={onBack}
           className="text-sm text-primary hover:underline"
           disabled={loading}
-        >
-          ← Natrag na prijavu
-        </button>
+        >{t("← Natrag na prijavu")}</button>
       </div>
     </div>
   );

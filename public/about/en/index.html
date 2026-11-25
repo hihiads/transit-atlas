@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How Transitly shows live ZET vehicles in Zagreb and HŽPP train times and delays, with sources and licence information.">
+  <title>About Transitly – Live ZET in Zagreb and HŽPP train times</title>
+  <link rel="canonical" href="https://transitly.eu/about/en/">
+  <link rel="alternate" hreflang="hr" href="https://transitly.eu/about/">
+  <link rel="alternate" hreflang="en" href="https://transitly.eu/about/en/">
+  <link rel="icon" href="../favicon.png" type="image/png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <a class="skip" href="#sadrzaj">Skip to content</a>
+  <header class="top wrap">
+    <a class="brand" href="#sadrzaj"><img src="../favicon.png" alt="" width="32" height="32"> About Transitly</a>
+    <nav aria-label="Main navigation">
+      <a href="#izrada">How it works</a>
+      <a href="#prava">Copyright</a>
+      <a href="/">Live ZET in Zagreb</a>
+      <a href="/hzpp/" class="app">HŽPP trains</a>
+    </nav>
+  </header>
+  <main id="sadrzaj">
+    <div class="hero wrap">
+      <div>
+        <p class="eyebrow">An independent public transport project</p>
+        <h1>How I built<br> <em>Transitly.</em></h1>
+        <p class="intro">When I'm waiting for a tram, I want to know when the next one leaves and where that estimate comes from. That's the question I built Transitly around.</p>
+        <p class="signature">Din Mulajusufović <span>Project creator</span></p>
+      </div>
+      <figure class="diagram">
+        <figcaption>From the timetable to your screen</figcaption>
+        <ol>
+          <li><strong>Timetable</strong><span>Routes, stops and scheduled departures</span></li>
+          <li><strong>Live data</strong><span>Positions and updates reported by the source</span></li>
+          <li><strong>Transitly</strong><span>Map and departures</span></li>
+        </ol>
+      </figure>
+    </div>
+    <div class="story wrap">
+      <section id="aplikacija">
+        <h2>What you can check in Transitly</h2>
+        <div>
+          <p>For journeys in Zagreb, open the <a href="/">ZET bus and tram map</a>. Find your route, direction and stop, then see the vehicle positions ZET reports live and the next departures.</p>
+          <p>For train journeys, use the <a href="/hzpp/">HŽPP departure and arrival search</a>. Choose your stations, date and time. When HŽPP reports a delay, Transitly shows the estimate with the delay included and the original departure time.</p>
+        </div>
+      </section>
+      <section id="izrada">
+        <h2>What happens behind the map</h2>
+        <div>
+          <p>For Zagreb buses and trams, I start with static GTFS. It contains stops, routes, paths and scheduled times. GTFS Realtime supplies another layer. When the source sends a vehicle position or a departure update, Transitly can match it to the route and show it in the app.</p>
+          <p>The map labels timetable departures <strong>Scheduled</strong> and departures with a source update <strong>Live</strong>. If the source data arrives late, the app's display will lag too. Check the operator's notices for service changes.</p>
+          <p>The interface uses React and TypeScript. I draw the map with Leaflet and OpenStreetMap tiles, and the server runs on Node.js and Express. A separate train view shows connections and transfers using data from HŽPP. I run the project independently of ZET and HŽPP.</p>
+        </div>
+      </section>
+      <section id="prava">
+        <h2>Who owns the code, map and data?</h2>
+        <div>
+          <p>I keep my original code, copy and graphics for Transitly separate from third-party materials. Git records changes to the code, and I keep notes on sources and licences with the project. Get in touch if you'd like to republish my work or use the logo in another project.</p>
+          <dl>
+            <div><dt>Map</dt><dd>The map credits <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>. That page also explains licensing and attribution.</dd></div>
+            <div><dt>Transport</dt><dd>Timetables and vehicle data come from transport operators. Check each source's terms before reusing its data.</dd></div>
+            <div><dt>Libraries and icons</dt><dd>I use third-party libraries such as Leaflet and Lucide icons under their licences. Their authors retain their respective rights.</dd></div>
+          </dl>
+          <p>For permission requests or to report disputed content, email <a href="mailto:info@transitly.eu">info@transitly.eu</a> with a link and the name of the material in question.</p>
+        </div>
+      </section>
+      <section id="autor">
+        <h2>Who's behind the project</h2>
+        <div><p>I'm Din Mulajusufović. I build and run Transitly. If something on the map doesn't match what you see, send me the route number, stop and approximate time. I can check what the source sent and how Transitly displayed it.</p>
+        <a class="contact" href="mailto:info@transitly.eu">Get in touch</a></div>
+      </section>
+    </div>
+  </main>
+  <footer class="wrap bottom">
+    <span>© 2026 Din Mulajusufović</span>
+    <a href="/terms">Terms of use</a>
+  </footer>
+</body>
+</html>

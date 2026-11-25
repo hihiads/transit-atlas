@@ -1,3 +1,4 @@
+import { t } from './services/i18n';
 import { useState, useEffect } from 'react';
 import MapView from './components/MapView';
 import Header from './components/Header';
@@ -78,7 +79,7 @@ function App() {
         const moment = mins <= 10 && mins >= 0 ? 'soon' : mins < 0 && mins >= -1 ? 'now' : '';
         const key = `transit-notified:${now.toDateString()}:${item}:${moment}`;
         if (moment && !sessionStorage.getItem(key)) {
-          new Notification(moment === 'soon' ? 'Polazak za 10 minuta' : 'Vrijeme polaska', { body: `Praćeni polazak je u ${time.slice(0, 5)}. Otvorite Transitly za stanje.` });
+          new Notification(moment === 'soon' ? t("Polazak za 10 minuta") : t("Vrijeme polaska"), { body: t("Praćeni polazak je u {0}. Otvorite Transitly za stanje.", time.slice(0, 5)) });
           sessionStorage.setItem(key, '1');
         }
       }
@@ -99,7 +100,7 @@ function App() {
         if (activeCity) setSelectedCity(activeCity);
         else setTransitDataLoading(false);
       })
-      .catch(() => { setError('Nije moguće učitati popis gradova'); setTransitDataLoading(false); })
+      .catch(() => { setError(t("Nije moguće učitati popis gradova")); setTransitDataLoading(false); })
       .finally(() => setLoading(false));
     return () => { window.clearInterval(interval); window.removeEventListener('focus', refreshAuthStatus); };
   }, []);
@@ -141,7 +142,7 @@ function App() {
       })
       .catch(() => {
         if (cancelled) return;
-        setError('Nije moguće učitati podatke o vozilima');
+        setError(t("Nije moguće učitati podatke o vozilima"));
         setVehicles([]);
       })
       .finally(() => { if (!cancelled) setTransitDataLoading(false); });
@@ -231,7 +232,7 @@ function App() {
       setLocating(false);
     }, error => {
       setLocating(false);
-      setLocationMessage(error.code === error.PERMISSION_DENIED ? 'Lokacija nije dopuštena. Možete je uključiti u postavkama uređaja.' : 'Lokacija trenutačno nije dostupna. Pokušajte ponovno.');
+      setLocationMessage(error.code === error.PERMISSION_DENIED ? t("Lokacija nije dopuštena. Možete je uključiti u postavkama uređaja.") : t("Lokacija trenutačno nije dostupna. Pokušajte ponovno."));
     }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
 
@@ -241,7 +242,7 @@ function App() {
     getDevicePosition(({ coords }) => {
       const validStops = stops.filter(stop => Number.isFinite(stop.lat) && Number.isFinite(stop.lon) && Math.abs(stop.lat) <= 90 && Math.abs(stop.lon) <= 180);
       if (!validStops.length) {
-        setLocationMessage('Stanice trenutačno nisu dostupne.');
+        setLocationMessage(t("Stanice trenutačno nisu dostupne."));
         setLocating(false);
         return;
       }
@@ -260,11 +261,11 @@ function App() {
       setShowStops(true);
       setMapCenter([nearest.lat, nearest.lon]);
       setMapZoom(15);
-      setLocationMessage(`Najbliža stanica je ${meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1)} km`} od vas.`);
+      setLocationMessage(t("Najbliža stanica je {0} od vas.", meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1)} km`));
       setLocating(false);
     }, error => {
       setLocating(false);
-      setLocationMessage(error.code === error.PERMISSION_DENIED ? 'Lokacija nije dopuštena. Možete je uključiti u postavkama uređaja.' : 'Lokacija trenutačno nije dostupna. Pokušajte ponovno.');
+      setLocationMessage(error.code === error.PERMISSION_DENIED ? t("Lokacija nije dopuštena. Možete je uključiti u postavkama uređaja.") : t("Lokacija trenutačno nije dostupna. Pokušajte ponovno."));
     }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
 
@@ -284,7 +285,7 @@ function App() {
 
   if (loading || authStatusLoading || transitDataLoading) {
     return (
-      <div className="transit-loader-page"><TransitLoadingAnimation mode="tram" label="Učitavam ZET i Transitly podatke…" /></div>
+      <div className="transit-loader-page"><TransitLoadingAnimation mode="tram" label={t("Učitavam ZET i Transitly podatke…")} /></div>
     );
   }
 
@@ -292,7 +293,7 @@ function App() {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[#f3f7f6] p-4">
         <div className="max-w-md rounded-3xl border border-rose-100 bg-white p-8 text-center shadow-xl shadow-slate-900/5">
-          <div className="mb-2 text-xl font-bold text-slate-900">Nešto nije učitano</div>
+          <div className="mb-2 text-xl font-bold text-slate-900">{t("Nešto nije učitano")}</div>
           <div className="text-sm leading-6 text-slate-600">{error}</div>
         </div>
       </div>
@@ -302,7 +303,7 @@ function App() {
   if (!selectedCity) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[#f3f7f6]">
-        <div className="rounded-2xl bg-white px-6 py-5 text-sm font-medium text-slate-600 shadow">Trenutno nema dostupnih gradova.</div>
+        <div className="rounded-2xl bg-white px-6 py-5 text-sm font-medium text-slate-600 shadow">{t("Trenutno nema dostupnih gradova.")}</div>
       </div>
     );
   }
@@ -319,26 +320,26 @@ function App() {
         menuOpen={showMapMenu}
         onMenuToggle={() => setShowMapMenu(!showMapMenu)}
         menuContent={<>
-          <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)} className="mb-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{darkMode ? '☀️ Svijetli način rada' : '🌙 Tamni način rada'}</button>
+          <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)} className="mb-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
           <div className="grid grid-cols-1 gap-2">
-            <button onClick={() => { findMyLocation(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? 'Tražim lokaciju…' : 'Moja lokacija'}</button>
-            <button onClick={() => { findNearestStop(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? 'Tražim…' : 'Moja najbliža stanica'}</button>
-            <button onClick={() => { setShowSchedule(true); setShowMapMenu(false); }} className="min-h-11 rounded-xl bg-[#102638] px-3 py-2.5 text-left text-sm font-semibold text-white shadow-sm">Linije i polasci</button>
-            <button onClick={() => setShowStops(!showStops)} aria-pressed={showStops} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showStops ? '✓ Sakrij stanice' : 'Prikaži stanice'}</button>
-            <button onClick={() => setShowShapes(!showShapes)} aria-pressed={showShapes} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showShapes ? '✓ Sakrij trase linija' : 'Prikaži trase linija'}</button>
+            <button onClick={() => { findMyLocation(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? t("Tražim lokaciju…") : t("Moja lokacija")}</button>
+            <button onClick={() => { findNearestStop(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? t("Tražim…") : t("Moja najbliža stanica")}</button>
+            <button onClick={() => { setShowSchedule(true); setShowMapMenu(false); }} className="min-h-11 rounded-xl bg-[#102638] px-3 py-2.5 text-left text-sm font-semibold text-white shadow-sm">{t("Linije i polasci")}</button>
+            <button onClick={() => setShowStops(!showStops)} aria-pressed={showStops} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showStops ? t("✓ Sakrij stanice") : t("Prikaži stanice")}</button>
+            <button onClick={() => setShowShapes(!showShapes)} aria-pressed={showShapes} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showShapes ? t("✓ Sakrij trase linija") : t("Prikaži trase linija")}</button>
           </div>
           {locationMessage && <p className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-700" role="status">{locationMessage}</p>}
-          {selectedCity.status === 'unavailable' && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Podaci za {selectedCity.name} još nisu dostupni.</p>}
-          {dataStatus === 'live' && <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">✓ Podaci uživo · lokacije koje šalje ZET.</p>}
-          {dataStatus === 'unavailable' && selectedCity.id === 'zagreb' && <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">Lokacije trenutačno nisu dostupne. Pokušajte ponovno kasnije.</p>}
-          <nav aria-label="Pravne informacije" className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-sm font-semibold text-slate-700">
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/privacy">Privatnost</a>
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/about/">O Transitlyju</a>
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/terms">Uvjeti korištenja</a>
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/cookies">Kolačići</a>
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="mailto:info@transitly.eu">Kontakt</a>
+          {selectedCity.status === 'unavailable' && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t("Podaci za") + " "}{selectedCity.name}{" " + t("još nisu dostupni.")}</p>}
+          {dataStatus === 'live' && <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{t("✓ Podaci uživo · lokacije koje šalje ZET.")}</p>}
+          {dataStatus === 'unavailable' && selectedCity.id === 'zagreb' && <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{t("Lokacije trenutačno nisu dostupne. Pokušajte ponovno kasnije.")}</p>}
+          <nav aria-label={t("Pravne informacije")} className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-sm font-semibold text-slate-700">
+            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/privacy">{t("Privatnost")}</a>
+            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/about/">{t("O Transitlyju")}</a>
+            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/terms">{t("Uvjeti korištenja")}</a>
+            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/cookies">{t("Kolačići")}</a>
+            <a className="rounded-lg px-2 py-2 hover:bg-white" href="mailto:info@transitly.eu">{t("Kontakt")}</a>
           </nav>
-          <p className="mt-2 text-xs text-slate-500">Transitly vodi Din Mulajusufović</p>
+          <p className="mt-2 text-xs text-slate-500">{t("Transitly vodi Din Mulajusufović")}</p>
         </>}
       />
 
@@ -350,7 +351,7 @@ function App() {
           <div className="absolute left-14 right-3 top-2 z-[999] md:hidden">
             <FilterPanel compact vehicles={vehicles} routes={routes} selectedType={selectedType} selectedLine={selectedLine} onTypeChange={(type) => { setSelectedType(type); setSelectedLine(''); }} onLineChange={setSelectedLine} />
           </div>
-        {selectedCity.status === 'active' ? <MapView vehicles={filteredVehicles} stops={showStops ? stops : []} shapes={shapes} center={mapCenter} zoom={mapZoom} userLocation={userLocation} showStops={showStops} showShapes={showShapes} onVehicleClick={setSelectedVehicle} onStopClick={(stop) => { setNearestDistance(null); setSelectedStop(stop); }} /> : <div className="flex h-full w-full items-center justify-center bg-gray-100"><div className="max-w-md p-8 text-center"><div className="mb-2 text-2xl font-bold text-gray-800">{selectedCity.name}</div><div className="mb-4 text-gray-600">Podaci uživo trenutno nisu dostupni za ovaj grad.</div><div className="text-sm text-gray-500">Uskoro ćemo dodati podršku za više gradova.</div></div></div>}
+        {selectedCity.status === 'active' ? <MapView vehicles={filteredVehicles} stops={showStops ? stops : []} shapes={shapes} center={mapCenter} zoom={mapZoom} userLocation={userLocation} showStops={showStops} showShapes={showShapes} onVehicleClick={setSelectedVehicle} onStopClick={(stop) => { setNearestDistance(null); setSelectedStop(stop); }} /> : <div className="flex h-full w-full items-center justify-center bg-gray-100"><div className="max-w-md p-8 text-center"><div className="mb-2 text-2xl font-bold text-gray-800">{selectedCity.name}</div><div className="mb-4 text-gray-600">{t("Podaci uživo trenutno nisu dostupni za ovaj grad.")}</div><div className="text-sm text-gray-500">{t("Uskoro ćemo dodati podršku za više gradova.")}</div></div></div>}
         </div>
       </div>
       {selectedVehicle && (
@@ -373,9 +374,9 @@ function App() {
             <div className="flex justify-between items-start mb-3">
               <div>
                 <div className="text-xl font-bold text-primary">{selectedStop.name}</div>
-                <div className="mt-1 text-sm text-gray-500">Stanica autobusa ili tramvaja{nearestDistance !== null ? ` · ${nearestDistance < 1000 ? `${nearestDistance} m od vas` : `${(nearestDistance / 1000).toFixed(1)} km od vas`}` : ''}</div>
+                <div className="mt-1 text-sm text-gray-500">{t("Stanica autobusa ili tramvaja")}{nearestDistance !== null ? ` · ${nearestDistance < 1000 ? `${nearestDistance} m od vas` : `${(nearestDistance / 1000).toFixed(1)} km od vas`}` : ''}</div>
                 {selectedStop.code && (
-                  <div className="text-sm text-gray-500">Kod: {selectedStop.code}</div>
+                  <div className="text-sm text-gray-500">{t("Kod:") + " "}{selectedStop.code}</div>
                 )}
               </div>
               <button
@@ -392,9 +393,7 @@ function App() {
                 setShowSchedule(true);
               }}
               className="w-full bg-primary text-white py-2 rounded-lg hover:bg-blue-700"
-            >
-              Pogledaj polaske
-            </button>
+            >{t("Pogledaj polaske")}</button>
           </div>
         </div>
       )}
