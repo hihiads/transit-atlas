@@ -3,9 +3,10 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { getRuntimeSettings, isAuthenticationEnabled, missingAuthenticationEnvironment, saveRuntimeSettings } from '../config/runtimeSettings.js';
 import { activateAuthentication } from '../services/authRuntime.js';
-import { adminLimiter } from '../middleware/security.js';
+import { adminLimiter, adminTotpLimiter } from '../middleware/security.js';
 import { requireTrustedOrigin } from '../config/origins.js';
 import { requireAdminAccess } from '../middleware/adminAccess.js';
+import { adminTotpConfigured, consumeAdminTotp } from '../middleware/adminTotp.js';
 
 const router = express.Router();
 const cookieName = 'transit-admin';
@@ -25,7 +26,6 @@ function requireAdmin(req, res, next) {
     adminSessions.delete(key);
     return res.status(401).json({ error: 'Prijavite se u administratorski panel.' });
   }
-  if (session.subject !== res.locals.adminSubject) return res.sendStatus(403);
   next();
 }
 
@@ -39,8 +39,8 @@ router.use((req, res, next) => {
 });
 router.use(express.json({ limit: '10kb' }), express.urlencoded({ extended: true, limit: '10kb' }));
 
-router.post('/login', adminLimiter, body('password').isString().isLength({ min: 1, max: 256 }), (req, res) => {
-  if (!process.env.ADMIN_PANEL_PASSWORD || process.env.ADMIN_PANEL_PASSWORD.length < 16) {
+router.post('/login', adminLimiter, body('password').isString().isLength({ min: 1, max: 256 }), (req, res, next) => {
+  if (!adminTotpConfigured || !process.env.ADMIN_PANEL_PASSWORD || process.env.ADMIN_PANEL_PASSWORD.length < 16) {
     return res.status(503).json({ error: 'Administratorska prijava nije konfigurirana.' });
   }
   const errors = validationResult(req);
@@ -49,6 +49,12 @@ router.post('/login', adminLimiter, body('password').isString().isLength({ min: 
   if (!errors.isEmpty() || !timingSafeEqual(supplied, expected)) {
     console.info(JSON.stringify({ event: 'admin.login', outcome: 'failure' }));
     return res.status(401).json({ error: 'Lozinka nije ispravna.' });
+  }
+  next();
+}, adminTotpLimiter, (req, res) => {
+  if (!consumeAdminTotp(req.body.code)) {
+    console.info(JSON.stringify({ event: 'admin.login', outcome: 'failure' }));
+    return res.status(401).json({ error: 'Kod iz aplikacije za autentifikaciju nije ispravan ili je već iskorišten.' });
   }
   const now = Date.now();
   for (const [key, session] of adminSessions) {
@@ -60,8 +66,7 @@ router.post('/login', adminLimiter, body('password').isString().isLength({ min: 
   }
   const token = randomBytes(32).toString('hex');
   adminSessions.set(createHash('sha256').update(token).digest('hex'), {
-    expiresAt: now + cookieOptions.maxAge,
-    subject: res.locals.adminSubject
+    expiresAt: now + cookieOptions.maxAge
   });
   console.info(JSON.stringify({ event: 'admin.login', outcome: 'success' }));
   res.cookie(cookieName, token, cookieOptions).json({ message: 'Prijavljeni ste.' });

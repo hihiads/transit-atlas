@@ -17,8 +17,7 @@ SESSION_SECRET=<generirajte-48-random-znakova>
 PASSWORD_PEPPER=<generirajte-48-random-znakova>
 ADMIN_PANEL_PASSWORD=<duga-nasumična-lozinka>
 ADMIN_HOST=admin.transitly.eu
-CLOUDFLARE_ACCESS_TEAM_DOMAIN=<tim>.cloudflareaccess.com
-CLOUDFLARE_ACCESS_AUD=<aud-iz-cloudflare-access-aplikacije>
+ADMIN_TOTP_SECRET=<32-nasumicna-Base32-znaka>
 AUTH_LOGIN_ENABLED=true
 AUTH_REGISTRATION_ENABLED=true
 AUTH_GOOGLE_ENABLED=true
@@ -51,9 +50,19 @@ APPLE_REDIRECT_URI=https://vaša-domena.com
 
 ### Administratorski pristup
 
-Dodajte `admin.transitly.eu` kao custom domenu na Renderu i uključite Cloudflare proxy. U Cloudflare Accessu napravite self-hosted aplikaciju za cijeli `admin.transitly.eu`. Dopustite samo imenovane administratore uz MFA. Postavite domenu, Access team domain i Application Audience (AUD) na Renderu. Express provjerava host i potpisani Access token prije posluživanja panela ili `/api/admin` ruta. Otvorite `https://admin.transitly.eu/admin` i nakon Access prijave unesite `ADMIN_PANEL_PASSWORD`. Admin sesija traje 30 minuta i opoziva se pri odjavi. Sesije i ograničenja zahtjeva čuvaju se u memoriji jedne instance. [Cloudflare Access provjera tokena](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
+Dodajte admin.transitly.eu kao custom domenu na Renderu. Ostavite CNAME na DNS only dok Render ne potvrdi domenu i izda TLS certifikat. Postavite ADMIN_HOST=admin.transitly.eu.
 
-Bez postavki za Access admin rute u produkciji vraćaju 404. Na `transitly.eu`, `www.transitly.eu` i Renderovoj zadanoj domeni provjerite da `/admin` i `/api/admin/settings` vraćaju 404. `/api/system/status` služi provjeri dostupnosti. Detalji feedova dostupni su nakon prijave u panel.
+Generirajte tajnu lokalno u terminalu.
+
+```sh
+node -e "console.log(Array.from(require('node:crypto').randomBytes(32), n => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'[n & 31]).join(''))"
+```
+
+Spremite rezultat kao ADMIN_TOTP_SECRET u Renderu. U aplikaciji za autentifikaciju ručno dodajte vremenski račun s istom tajnom. Formati su Base32, SHA-1, šest znamenki i 30 sekundi. Čuvajte tajnu kao lozinku. Ako izgubite pristup aplikaciji, generirajte novu tajnu i zamijenite vrijednost u Renderu prije ponovne prijave.
+
+Otvorite https://admin.transitly.eu/admin i unesite administratorsku lozinku i trenutni šesteroznamenkasti kod. Admin sesija traje 30 minuta i opoziva se pri odjavi. Sesije, ograničenja i zaštita od ponovne uporabe koda čuvaju se u memoriji jedne instance. Prije skaliranja koristite zajedničku pohranu za ta stanja.
+
+U produkciji na transitly.eu, www.transitly.eu i Renderovoj zadanoj domeni provjerite da /admin i /api/admin/settings vraćaju 404. Na admin domenu prijava se omogućuje nakon postavljanja tajne. /api/system/status služi provjeri dostupnosti. Detalji feedova dostupni su nakon prijave u panel.
 
 ### Cloudflare cache i ograničenje za vozila
 

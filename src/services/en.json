@@ -40,6 +40,8 @@
   "7. Operator, kontakt i promjene": "7. Operator, contact and updates",
   "Administracija": "Administration",
   "Administratorska lozinka": "Administrator password",
+  "Kod iz aplikacije za autentifikaciju": "Authenticator app code",
+  "Kod iz aplikacije za autentifikaciju nije ispravan ili je već iskorišten.": "The authenticator code is invalid or has already been used.",
   "Administratorska prijava nije konfigurirana.": "Administrator sign-in is not configured.",
   "Agenciji za zaštitu osobnih podataka": "Croatian Personal Data Protection Agency",
   "Ako nema rezultata, Transitly prikazuje da HŽPP nije vratio dostupnu vezu za zadanu relaciju, datum i vrijeme. To je rezultat pretrage, a ne službena potvrda da vlak ne prometuje ili da ne postoji druga mogućnost putovanja. Podaci mogu izostati zbog promjene voznog reda, zatvora pruge, zamjenskog prijevoza, ograničenja izvora ili privremene nedostupnosti sustava. HŽPP objavljuje": "If there are no results, HŽPP did not return an available connection for the route, date and time you selected. This is a search result and does not officially confirm whether a train is running or whether other travel options exist. Data may be missing due to timetable changes, track closures, replacement services, source limitations or temporary outages. HŽPP publishes an",

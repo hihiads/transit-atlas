@@ -3,18 +3,14 @@ import { once } from 'node:events';
 import { request } from 'node:http';
 import { after, test } from 'node:test';
 import express from 'express';
-import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 
 const host = 'admin.transitly.test';
-const issuer = 'https://test.cloudflareaccess.com';
-const audience = 'transitly-admin';
 const password = 'fixture-admin-password';
 Object.assign(process.env, {
   NODE_ENV: 'production',
   ADMIN_HOST: host,
   ADMIN_PANEL_PASSWORD: password,
-  CLOUDFLARE_ACCESS_TEAM_DOMAIN: new URL(issuer).hostname,
-  CLOUDFLARE_ACCESS_AUD: audience,
+  ADMIN_TOTP_SECRET: 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
   APP_ORIGIN: 'https://transitly.test,https://localhost,capacitor://localhost',
   TURNSTILE_SECRET_KEY: 'fixture-turnstile-secret'
 });
@@ -49,32 +45,27 @@ function send(path, { headers, body, method = body === undefined ? 'GET' : 'POST
   });
 }
 
-test('admin routes require the dedicated host and Access identity, then an admin session', async t => {
-  const { publicKey, privateKey } = await generateKeyPair('RS256', { extractable: true });
-  const jwk = { ...await exportJWK(publicKey), kid: 'fixture', alg: 'RS256' };
-  t.mock.method(globalThis, 'fetch', async url => {
-    assert.equal(String(url), `${issuer}/cdn-cgi/access/certs`);
-    return Response.json({ keys: [jwk] });
-  });
-  const sign = (subject, aud = audience) => new SignJWT({}).setProtectedHeader({ alg: 'RS256', kid: 'fixture' })
-    .setIssuer(issuer).setAudience(aud).setSubject(subject).setExpirationTime('5m').sign(privateKey);
-  const headers = { host, 'Cf-Access-Jwt-Assertion': await sign('admin-1') };
-  const origin = `https://${host}`;
-
-  assert.equal((await send('/admin', { headers: { ...headers, host: 'transitly.test' } })).statusCode, 404);
-  assert.equal((await send('/admin', { headers: { host } })).statusCode, 403);
-  assert.equal((await send('/admin', { headers: { ...headers, 'Cf-Access-Jwt-Assertion': await sign('admin-1', 'other-app') } })).statusCode, 403);
+test('admin requires its own host and an unused authenticator code before issuing a session', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 59_000 });
+  const headers = { host };
+  const origin = 'https://' + host;
+  const post = (body, requestOrigin = origin) => send('/api/admin/login', { headers: { ...headers, origin: requestOrigin }, body });
+  const code = '287082'; // Last six digits of the RFC 6238 SHA-1 test vector at 59 seconds.
+  assert.equal((await send('/admin', { headers: { host: 'transitly.test' } })).statusCode, 404);
+  assert.equal((await send('/api/admin/settings', { headers: { host: 'transitly.test' } })).statusCode, 404);
   assert.equal((await send('/admin', { headers })).statusCode, 200);
   assert.equal((await send('/api/admin/settings', { headers })).statusCode, 401);
-  assert.equal((await send('/api/admin/logout', { headers: { ...headers, origin }, method: 'POST' })).statusCode, 401);
-  assert.equal((await send('/api/admin/login', { headers: { ...headers, origin: 'https://transitly.test' }, body: { password } })).statusCode, 403);
+  assert.equal((await post({ password, code }, 'https://transitly.test')).statusCode, 403);
+  assert.equal((await post({ password })).statusCode, 401);
+  assert.equal((await post({ password, code: '000000' })).statusCode, 401);
+  assert.equal((await post({ password: 'wrong', code })).statusCode, 401);
 
-  const login = await send('/api/admin/login', { headers: { ...headers, origin }, body: { password } });
+  const login = await post({ password, code });
   assert.equal(login.statusCode, 200);
   assert.match(login.headers['set-cookie'][0], /HttpOnly; Secure; SameSite=Strict/);
+  assert.equal((await post({ password, code })).statusCode, 401);
   headers.cookie = login.headers['set-cookie'][0].split(';')[0];
   assert.equal((await send('/api/admin/settings', { headers })).statusCode, 200);
-  assert.equal((await send('/api/admin/settings', { headers: { ...headers, 'Cf-Access-Jwt-Assertion': await sign('admin-2') } })).statusCode, 403);
   assert.equal((await send('/api/admin/logout', { headers: { ...headers, origin }, method: 'POST' })).statusCode, 200);
   assert.equal((await send('/api/admin/settings', { headers })).statusCode, 401);
 });

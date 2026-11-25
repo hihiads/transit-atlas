@@ -70,10 +70,17 @@ export const heavyLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-export const adminLimiter = rateLimit({
+const adminLimitOptions = {
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { error: 'Previše pokušaja. Pokušajte ponovno za 15 minuta.' },
   standardHeaders: true,
   legacyHeaders: false
+};
+
+export const adminLimiter = rateLimit(adminLimitOptions);
+export const adminTotpLimiter = rateLimit({
+  ...adminLimitOptions,
+  keyGenerator: () => 'admin-totp',
+  skipSuccessfulRequests: true
 });

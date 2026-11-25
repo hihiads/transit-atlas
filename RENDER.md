@@ -23,7 +23,7 @@ Projekt koristi jedan Node web service: Vite izgradi frontend, a Express posluž
 2. Unesite tražene tajne:
    - `MONGODB_URI`: MongoDB Atlas connection string
    - `ADMIN_PANEL_PASSWORD`: jedinstvena lozinka od najmanje 16 znakova
-   - `CLOUDFLARE_ACCESS_TEAM_DOMAIN` i `CLOUDFLARE_ACCESS_AUD`: postavke Access aplikacije za `ADMIN_HOST`
+   - ADMIN_TOTP_SECRET s 32 nasumična Base32 znaka. Unesite istu tajnu u aplikaciju za autentifikaciju.
    - `APP_ORIGIN`: puna HTTPS adresa Render servisa, npr. `https://transit-atlas.onrender.com`
    - `TURNSTILE_SITE_KEY` i `TURNSTILE_SECRET_KEY`: ključevi za tu domenu iz Cloudflare Turnstilea
    - `VITE_TURNSTILE_SITE_KEY`: isti Turnstile site key; koristi se tijekom builda frontenda

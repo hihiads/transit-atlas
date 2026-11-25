@@ -29,6 +29,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export default function AdminPanel() {
   useEffect(() => { document.title = t("Transitly – Administracija"); }, []);
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
   const [settings, setSettings] = useState<Settings>({ loginEnabled: false, registrationEnabled: false, googleEnabled: false });
   const [draft, setDraft] = useState<Settings>({ loginEnabled: false, registrationEnabled: false, googleEnabled: false });
@@ -57,8 +58,9 @@ export default function AdminPanel() {
     setBusy(true);
     setMessage('');
     try {
-      await request('/login', { method: 'POST', body: JSON.stringify({ password }) });
+      await request('/login', { method: 'POST', body: JSON.stringify({ password, code }) });
       setPassword('');
+      setCode('');
       await loadSettings();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("Prijava nije uspjela."));
@@ -123,6 +125,9 @@ export default function AdminPanel() {
           <form onSubmit={signIn} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <h2 className="text-lg font-semibold">{t("Prijava administratora")}</h2>
             <label className="mt-5 block text-sm font-medium">{t("Administratorska lozinka")}<input type="password" autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+            </label>
+            <label className="mt-5 block text-sm font-medium">{t("Kod iz aplikacije za autentifikaciju")}
+              <input type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={event => setCode(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
             </label>
             <button disabled={busy} className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60">{busy ? t("Provjera…") : t("Prijavi se")}</button>
             {message && <p className="mt-4 text-sm text-red-700" role="alert">{message}</p>}
