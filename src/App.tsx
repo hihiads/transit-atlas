@@ -333,6 +333,7 @@ function App() {
           {dataStatus === 'unavailable' && selectedCity.id === 'zagreb' && <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">Lokacije trenutačno nisu dostupne. Pokušajte ponovno kasnije.</p>}
           <nav aria-label="Pravne informacije" className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-sm font-semibold text-slate-700">
             <a className="rounded-lg px-2 py-2 hover:bg-white" href="/privacy">Privatnost</a>
+            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/about/">O Transitlyju</a>
             <a className="rounded-lg px-2 py-2 hover:bg-white" href="/terms">Uvjeti korištenja</a>
             <a className="rounded-lg px-2 py-2 hover:bg-white" href="/cookies">Kolačići</a>
             <a className="rounded-lg px-2 py-2 hover:bg-white" href="mailto:info@transitly.eu">Kontakt</a>

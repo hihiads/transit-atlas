@@ -292,7 +292,7 @@ export default function TransitlyHzpp() {
             </article>;
           })}
         </div>
-        <div className="panel-footnote">Polasci i kašnjenja preuzeti su iz HŽPP-ovih podataka. HŽPP ne šalje GPS lokaciju vlaka; stanica uz kašnjenje označava zadnju prijavu, ne položaj uživo. <a href="/terms">Uvjeti korištenja</a></div>
+        <div className="panel-footnote">Polasci i kašnjenja preuzeti su iz HŽPP-ovih podataka. HŽPP ne šalje GPS lokaciju vlaka; stanica uz kašnjenje označava zadnju prijavu, ne položaj uživo. <a href="/about/">O Transitlyju</a> · <a href="/terms">Uvjeti korištenja</a></div>
       </aside>
 
       <section className="data-note" aria-live="polite"><span className="status-dot" />{search ? search.date === zagrebDate() ? <> Današnji polasci osvježavaju se svakih 30 sekundi <span>·</span> {new Intl.DateTimeFormat('hr-HR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zagreb' }).format(now)}</> : ' Raspored za odabrani datum' : ' Unesi relaciju i datum za prikaz polazaka'}</section>
