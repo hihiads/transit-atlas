@@ -4,7 +4,7 @@ const actionPaths = ['/verify-email', '/reset-password', '/confirm-parent'];
 function readActionToken() {
   if (!actionPaths.includes(url.pathname)) return '';
   const fragment = new URLSearchParams(url.hash.slice(1));
-  const token = fragment.get('token') || url.searchParams.get('token') || '';
+  const token = fragment.get('token') || '';
   if (fragment.has('token') || url.searchParams.has('token')) {
     fragment.delete('token');
     url.hash = fragment.toString();

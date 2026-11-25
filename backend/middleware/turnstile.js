@@ -1,10 +1,11 @@
-import fetch from 'node-fetch';
+import { getAllowedOrigins, isNativeAppOrigin } from '../config/origins.js';
 
 export const verifyTurnstile = action => async (req, res, next) => {
-  // Skip u lokalnom razvoju ako je TURNSTILE_SECRET_KEY dummy vrijednost
-  if (process.env.NODE_ENV !== 'production' &&
-      (!process.env.TURNSTILE_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY.startsWith('1x0000000'))) {
-    return next();
+  const production = process.env.NODE_ENV === 'production';
+  const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
+  if (!secret || /^[123]x0{8}/.test(secret)) {
+    if (!production) return next();
+    return res.status(503).json({ error: 'Sigurnosna provjera trenutačno nije dostupna.' });
   }
 
   const token = req.body?.turnstileToken;
@@ -19,20 +20,18 @@ export const verifyTurnstile = action => async (req, res, next) => {
       signal: AbortSignal.timeout(5000),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        secret: process.env.TURNSTILE_SECRET_KEY,
+        secret,
         response: token,
         remoteip: req.ip
       })
     });
 
     const data = await response.json();
-    const allowedHostnames = (process.env.APP_ORIGIN || '').split(',').flatMap(origin => {
-      try { return [new URL(origin.trim()).hostname]; } catch { return []; }
-    });
-    const validContext = process.env.NODE_ENV !== 'production' ||
-      (allowedHostnames.includes(data.hostname) && data.action === action);
-
-    if (!response.ok || !data.success || !validContext) {
+    const allowedHostnames = [...getAllowedOrigins()]
+      .filter(origin => origin.startsWith('https://') && !isNativeAppOrigin(origin))
+      .map(origin => new URL(origin).hostname);
+    if (!response.ok || data.success !== true || data.action !== action ||
+        (production && !allowedHostnames.includes(data.hostname))) {
       return res.status(400).json({ error: 'Turnstile provjera nije uspjela' });
     }
 

@@ -13,6 +13,12 @@ interface AdminResponse {
   missingEnvironment: string[];
 }
 
+interface SystemStatus {
+  stats?: { routes: number; stops: number };
+  rtFeedStatus?: string;
+  staleVehiclesDropped?: number;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/admin${path}`, { ...options, credentials: 'include', headers: { 'Content-Type': 'application/json', ...options?.headers } });
   const result = await response.json();
@@ -31,19 +37,19 @@ export default function AdminPanel() {
   const [busy, setBusy] = useState(false);
   const [refreshingData, setRefreshingData] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState('');
-  const [system, setSystem] = useState<{ stats?: { routes: number; stops: number }; rtFeedStatus?: string; staleVehiclesDropped?: number } | null>(null);
+  const [system, setSystem] = useState<SystemStatus | null>(null);
 
   async function loadSettings() {
     const result = await request<AdminResponse>('/settings');
     setSettings(result.settings);
     setDraft(result.settings);
     setMissing(result.missingEnvironment);
+    setSystem(await request<SystemStatus>('/system/status').catch(() => null));
     setAuthenticated(true);
   }
 
   useEffect(() => {
     loadSettings().catch(() => setAuthenticated(false));
-    fetch('/api/system/status').then(response => response.ok ? response.json() : null).then(setSystem).catch(() => {});
   }, []);
 
   async function signIn(event: FormEvent) {
@@ -82,6 +88,7 @@ export default function AdminPanel() {
   async function signOut() {
     await request('/logout', { method: 'POST' }).catch(() => {});
     setAuthenticated(false);
+    setSystem(null);
     setMessage(t("Odjavljeni ste."));
   }
 
@@ -95,8 +102,7 @@ export default function AdminPanel() {
       const newestUpdate = Math.max(0, ...result.vehicles.map((vehicle: { lastUpdate: number }) => vehicle.lastUpdate));
       const age = newestUpdate ? relativeUpdateTime(newestUpdate) : t("nema svježih lokacija");
       setRefreshMessage(t("Dohvaćeno {0} svježih vozila; najnoviji podatak {1}. Odbačeno zastarjelih lokacija: {2}.", result.vehicles.length, age, result.staleVehiclesDropped || 0));
-      const status = await fetch('/api/system/status', { cache: 'no-store' });
-      if (status.ok) setSystem(await status.json());
+      setSystem(await request<SystemStatus>('/system/status'));
     } catch (error) {
       setRefreshMessage(error instanceof Error ? error.message : t("Osvježavanje nije uspjelo."));
     } finally {

@@ -5,6 +5,7 @@ import { getRuntimeSettings, isAuthenticationEnabled, missingAuthenticationEnvir
 import { activateAuthentication } from '../services/authRuntime.js';
 import { adminLimiter } from '../middleware/security.js';
 import { requireTrustedOrigin } from '../config/origins.js';
+import { requireAdminAccess } from '../middleware/adminAccess.js';
 
 const router = express.Router();
 const cookieName = 'transit-admin';
@@ -19,18 +20,24 @@ function sessionKey(req) {
 
 function requireAdmin(req, res, next) {
   const key = sessionKey(req);
-  if (!(adminSessions.get(key) > Date.now())) {
+  const session = adminSessions.get(key);
+  if (!session || session.expiresAt <= Date.now()) {
     adminSessions.delete(key);
     return res.status(401).json({ error: 'Prijavite se u administratorski panel.' });
   }
+  if (session.subject !== res.locals.adminSubject) return res.sendStatus(403);
   next();
 }
 
+router.use(requireAdminAccess);
 router.use((req, res, next) => {
-  res.set('Cache-Control', 'no-store');
-  next();
+  if (process.env.NODE_ENV !== 'production') return requireTrustedOrigin(req, res, next);
+  const origin = req.get('origin');
+  if (origin === `https://${process.env.ADMIN_HOST?.trim().toLowerCase()}` ||
+      (!origin && ['GET', 'HEAD', 'OPTIONS'].includes(req.method))) return next();
+  res.sendStatus(403);
 });
-router.use(requireTrustedOrigin);
+router.use(express.json({ limit: '10kb' }), express.urlencoded({ extended: true, limit: '10kb' }));
 
 router.post('/login', adminLimiter, body('password').isString().isLength({ min: 1, max: 256 }), (req, res) => {
   if (!process.env.ADMIN_PANEL_PASSWORD || process.env.ADMIN_PANEL_PASSWORD.length < 16) {
@@ -44,18 +51,23 @@ router.post('/login', adminLimiter, body('password').isString().isLength({ min: 
     return res.status(401).json({ error: 'Lozinka nije ispravna.' });
   }
   const now = Date.now();
-  for (const [key, expiresAt] of adminSessions) {
-    if (expiresAt <= now) adminSessions.delete(key);
+  for (const [key, session] of adminSessions) {
+    if (session.expiresAt <= now) adminSessions.delete(key);
   }
   adminSessions.delete(sessionKey(req));
   if (adminSessions.size >= 100) {
     return res.status(503).json({ error: 'Previše aktivnih administratorskih sesija.' });
   }
   const token = randomBytes(32).toString('hex');
-  adminSessions.set(createHash('sha256').update(token).digest('hex'), now + cookieOptions.maxAge);
+  adminSessions.set(createHash('sha256').update(token).digest('hex'), {
+    expiresAt: now + cookieOptions.maxAge,
+    subject: res.locals.adminSubject
+  });
   console.info(JSON.stringify({ event: 'admin.login', outcome: 'success' }));
   res.cookie(cookieName, token, cookieOptions).json({ message: 'Prijavljeni ste.' });
 });
+
+router.use(requireAdmin);
 
 router.post('/logout', (req, res) => {
   if (adminSessions.delete(sessionKey(req))) {
@@ -65,13 +77,13 @@ router.post('/logout', (req, res) => {
   res.clearCookie(cookieName, clearOptions).json({ message: 'Odjavljeni ste.' });
 });
 
-router.get('/settings', requireAdmin, (req, res) => res.json({
+router.get('/settings', (req, res) => res.json({
   settings: getRuntimeSettings(),
   authenticationActive: isAuthenticationEnabled(),
   missingEnvironment: []
 }));
 
-router.patch('/settings', requireAdmin,
+router.patch('/settings',
   body('loginEnabled').isBoolean({ strict: true }),
   body('registrationEnabled').isBoolean({ strict: true }),
   body('googleEnabled').isBoolean({ strict: true }),

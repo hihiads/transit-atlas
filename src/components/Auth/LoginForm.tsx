@@ -3,6 +3,7 @@ import { useState, FormEvent } from 'react';
 import { login, SignedInUser } from '../../services/auth';
 import SocialAuthButtons from './SocialAuthButtons';
 import { isNativeApp } from '../../services/platform';
+import { useTurnstile } from './useTurnstile';
 
 interface LoginFormProps {
   onSuccess: (user?: SignedInUser) => void | Promise<void>;
@@ -16,18 +17,21 @@ export default function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToFor
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const turnstile = useTurnstile('login');
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!turnstile.ready) return;
     setError(null);
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, turnstile.token);
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("Greška pri prijavi"));
     } finally {
+      turnstile.reset();
       setLoading(false);
     }
   }
@@ -82,9 +86,11 @@ export default function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToFor
           disabled={loading}
         >{t("Zaboravili ste lozinku?")}</button>
 
+        {turnstile.challenge}
+
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !turnstile.ready}
           className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
           {loading ? t("Prijava...") : t("Prijavi se")}

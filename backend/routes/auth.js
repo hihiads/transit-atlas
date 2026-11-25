@@ -10,7 +10,7 @@ import { randomBytes } from 'crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getRuntimeSettings, isAuthenticationEnabled } from '../config/runtimeSettings.js';
 import { isNativeAppOrigin, requireTrustedOrigin } from '../config/origins.js';
-import { asyncRoute, authLimiter, emailActionLimiter, oauthCallbackLimiter, oauthChallengeLimiter } from '../middleware/security.js';
+import { asyncRoute, emailActionLimiter, oauthCallbackLimiter, oauthChallengeLimiter } from '../middleware/security.js';
 import { deleteUserSessions } from '../services/authRuntime.js';
 
 const router = express.Router();
@@ -18,6 +18,7 @@ const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2
 const TERMS_VERSION = '2026-11-22-zet-hzpp';
 const registrationMessage = 'Ako se račun može otvoriti ili treba dodatnu potvrdu, provjerite email.';
 const verificationLifetime = 24 * 60 * 60 * 1000;
+const [loginIpLimiter, loginEmailLimiter] = emailActionLimiter({ maxByIp: 5, maxByEmail: 5, skipSuccessfulRequests: true });
 
 function sessionCookieOptions(req) {
   return {
@@ -343,8 +344,10 @@ router.post('/register',
 router.post('/login',
   requireLogin,
   requireSession,
-  authLimiter,
+  loginIpLimiter,
   emailInput(),
+  verifyTurnstile('login'),
+  loginEmailLimiter,
   body('password').isString().bail().isLength({ min: 1, max: 128 }),
   async (req, res) => {
     const errors = validationResult(req);
@@ -422,10 +425,10 @@ router.post('/logout', (req, res) => {
 router.post('/parent-consent', requireRegistration, actionToken(), body('consent').custom(value => value === true), async (req, res) => {
   if (!validationResult(req).isEmpty()) return res.status(400).json({ error: 'Poveznica nije ispravna ili je istekla.' });
   try {
-    const pending = await PendingRegistration.findOne({ tokenHash: hashToken(req.body.token), expiresAt: { $gt: new Date() } });
+    const tokenHash = hashToken(req.body.token);
+    const pending = await PendingRegistration.findOne({ tokenHash, expiresAt: { $gt: new Date() } });
     if (!pending) return res.status(400).json({ error: 'Poveznica nije ispravna ili je istekla.' });
     if (await User.exists({ email: pending.email })) {
-      await pending.deleteOne();
       return res.status(409).json({ error: 'Za ovu email adresu već postoji račun. Pokušajte se prijaviti.' });
     }
     const verificationToken = pending.googleSubject ? null : generateToken();
@@ -449,12 +452,13 @@ router.post('/parent-consent', requireRegistration, actionToken(), body('consent
         await user.deleteOne();
         throw error;
       }
-      await pending.deleteOne();
+      await PendingRegistration.deleteOne({ tokenHash });
       return res.json({ message: sent ? 'Suglasnost je potvrđena. Sada provjerite djetetov email kako biste dovršili registraciju.' : 'Suglasnost je potvrđena. Email djeteta treba potvrditi.', ...(!sent && process.env.NODE_ENV !== 'production' ? { verificationToken } : {}) });
     }
-    await pending.deleteOne();
+    await PendingRegistration.deleteOne({ tokenHash });
     res.json({ message: 'Suglasnost je potvrđena. Dijete se sada može prijaviti Google računom.' });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ error: 'Za ovu email adresu već postoji račun. Pokušajte se prijaviti.' });
     console.error('Parent consent error:', error.name);
     res.status(500).json({ error: 'Potvrda suglasnosti nije uspjela. Pokušajte ponovno.' });
   }

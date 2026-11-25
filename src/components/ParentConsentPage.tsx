@@ -53,7 +53,7 @@ export default function ParentConsentPage() {
       {!completed && childEmail && <>
         <label className="mt-5 flex items-start gap-3 text-sm leading-6 text-slate-800">
           <input type="checkbox" checked={checked} onChange={event => setChecked(event.target.checked)} className="mt-1" />
-          <span>{t("Potvrđujem da sam roditelj ili zakonski skrbnik i dajem suglasnost za korištenje Transitlyja.")}</span>
+          <span>{t("Potvrđujem da sam roditelj ili zakonski skrbnik djeteta i dajem suglasnost za obradu podataka opisanih u Politici privatnosti radi otvaranja i korištenja njegova računa za Transitly.")}</span>
         </label>
         <div className="mt-5 flex flex-wrap gap-4 text-sm"><a className="text-blue-800 underline" href="/privacy">{t("Politika privatnosti")}</a><a className="text-blue-800 underline" href="/terms">{t("Uvjeti korištenja")}</a></div>
         <button type="button" disabled={!checked || loading} onClick={() => void submit()} className="mt-6 w-full rounded-lg bg-[#102638] px-4 py-3 font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-500">{loading ? t("Potvrđujem…") : t("Potvrdi suglasnost")}</button>

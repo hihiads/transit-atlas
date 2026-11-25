@@ -21,6 +21,12 @@ services:
         sync: false
       - key: ADMIN_PANEL_PASSWORD
         sync: false
+      - key: ADMIN_HOST
+        value: admin.transitly.eu
+      - key: CLOUDFLARE_ACCESS_TEAM_DOMAIN
+        sync: false
+      - key: CLOUDFLARE_ACCESS_AUD
+        sync: false
       - key: APP_ORIGIN
         value: https://transitly.eu,https://www.transitly.eu,https://transit-atlas.onrender.com,https://localhost,capacitor://localhost
       - key: TURNSTILE_SITE_KEY

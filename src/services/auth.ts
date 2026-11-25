@@ -93,14 +93,14 @@ export async function confirmParentConsent(token: string): Promise<AuthResponse>
   return handleResponse<AuthResponse>(response);
 }
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
+export async function login(email: string, password: string, turnstileToken: string): Promise<AuthResponse> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: jsonHeaders,
       credentials: 'include',
-      body: JSON.stringify({ email: email.trim(), password }),
+      body: JSON.stringify({ email: email.trim(), password, turnstileToken }),
       signal: AbortSignal.timeout(15000)
     });
   } catch (error) {

@@ -108,7 +108,7 @@ export default function SocialAuthButtons({ onSuccess, intent, consent }: { onSu
       </div>
       {error && <p className="text-center text-sm text-red-600" role="alert">{error}</p>}
       {status && <p className="text-center text-sm text-slate-800" role="status">{status}</p>}
-      {parentToken && <a className="block break-all text-center text-sm font-medium text-blue-800 underline" href={`/confirm-parent?token=${encodeURIComponent(parentToken)}`}>{t("Otvori lokalnu poveznicu za roditelja")}</a>}
+      {parentToken && <a className="block break-all text-center text-sm font-medium text-blue-800 underline" href={`/confirm-parent#token=${encodeURIComponent(parentToken)}`}>{t("Otvori lokalnu poveznicu za roditelja")}</a>}
     </div>
   );
 }

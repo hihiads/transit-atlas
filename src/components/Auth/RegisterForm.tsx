@@ -1,29 +1,14 @@
-import { language, t } from '../../services/i18n';
-import { useState, FormEvent, useEffect, useRef } from 'react';
+import { t } from '../../services/i18n';
+import { useState, FormEvent } from 'react';
 import { AuthResponse, register, RegistrationConsent, SignedInUser } from '../../services/auth';
 import SocialAuthButtons from './SocialAuthButtons';
+import { useTurnstile } from './useTurnstile';
 
 interface RegisterFormProps {
   onSuccess: (response: AuthResponse) => void;
   onSocialSuccess: (user: SignedInUser) => void | Promise<void>;
   onSwitchToLogin: () => void;
   allowLogin: boolean;
-}
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (element: HTMLElement, options: {
-        sitekey: string;
-        action: string;
-        language?: 'hr' | 'en';
-        callback: (token: string) => void;
-        'error-callback': () => void;
-        theme?: 'light' | 'dark';
-      }) => string;
-      reset: (widgetId: string) => void;
-    };
-  }
 }
 
 export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLogin, allowLogin }: RegisterFormProps) {
@@ -36,44 +21,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-  const turnstileOptional = import.meta.env.DEV && !turnstileSiteKey;
-  const turnstileRef = useRef<HTMLDivElement>(null);
-  const widgetIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!turnstileSiteKey || !turnstileRef.current) return;
-
-    const script = document.createElement('script');
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-    script.async = true;
-    script.defer = true;
-
-    script.onload = () => {
-      if (window.turnstile && turnstileRef.current) {
-        widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-          sitekey: turnstileSiteKey,
-          action: 'register',
-          language,
-          callback: (token: string) => setTurnstileToken(token),
-          'error-callback': () => {
-            setError(t("Turnstile provjera nije uspjela"));
-            setTurnstileToken(null);
-          },
-          theme: 'light'
-        });
-      }
-    };
-
-    document.body.appendChild(script);
-
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-  }, []);
+  const turnstile = useTurnstile('register');
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -85,7 +33,7 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
       return;
     }
 
-    if (!turnstileToken && !turnstileOptional) {
+    if (!turnstile.ready) {
       setError(t("Molimo pričekajte Turnstile provjeru"));
       return;
     }
@@ -94,25 +42,13 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
 
     try {
       const consent: RegistrationConsent = { termsAccepted, ageRange, guardianEmail };
-      const response = await register(email, password, turnstileToken || '', consent);
+      const response = await register(email, password, turnstile.token, consent);
       setSuccess(response.message);
-
-      // Reset Turnstile
-      if (window.turnstile && widgetIdRef.current) {
-        window.turnstile.reset(widgetIdRef.current);
-      }
-      setTurnstileToken(null);
-
       onSuccess(response);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("Greška pri registraciji"));
-
-      // Reset Turnstile
-      if (window.turnstile && widgetIdRef.current) {
-        window.turnstile.reset(widgetIdRef.current);
-      }
-      setTurnstileToken(null);
     } finally {
+      turnstile.reset();
       setLoading(false);
     }
   }
@@ -203,13 +139,11 @@ export default function RegisterForm({ onSuccess, onSocialSuccess, onSwitchToLog
           />
         </div>
 
-        {turnstileSiteKey ? <div ref={turnstileRef} className="flex justify-center"></div> : turnstileOptional ? null : (
-          <p className="text-sm text-red-700" role="alert">{t("Registracija trenutačno nije konfigurirana. Administrator treba postaviti Cloudflare Turnstile ključeve.")}</p>
-        )}
+        {turnstile.challenge}
 
         <button
           type="submit"
-          disabled={loading || (!turnstileToken && !turnstileOptional)}
+          disabled={loading || !turnstile.ready}
           className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
           {loading ? t("Registracija...") : t("Registriraj se")}

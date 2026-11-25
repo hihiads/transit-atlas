@@ -95,7 +95,7 @@ export default function AuthModal({ onClose, loginEnabled, registrationEnabled }
             }
           }}>
             <h2 className="text-2xl font-bold mb-4 text-center text-primary">{t("Potvrda emaila")}</h2>
-            <p className="mb-4 text-sm text-gray-700" aria-live="polite">{verificationMessage}</p>
+            <p className="mb-4 text-sm text-gray-700" aria-live="polite">{verificationToken ? verificationMessage : t("Poveznica nije ispravna. Otvorite najnoviji email za potvrdu računa.")}</p>
             <label className="mb-4 block text-sm font-medium">{t("Lozinka")}<input type="password" autoComplete="current-password" required maxLength={128}
                 value={verificationPassword} onChange={event => setVerificationPassword(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-400 px-3 py-2" />
@@ -133,6 +133,7 @@ function ResetPasswordForm({ token, onDone }: { token: string; onDone: () => voi
   const [message, setMessage] = useState('');
   return <form className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg space-y-4" onSubmit={async (event) => {
     event.preventDefault();
+    if (!token) return;
     try {
       const result = await resetPassword(token, password);
       setMessage(result.message);
@@ -145,7 +146,7 @@ function ResetPasswordForm({ token, onDone }: { token: string; onDone: () => voi
     <h2 className="text-2xl font-bold text-center text-primary">{t("Nova lozinka")}</h2>
     <label className="block text-sm font-medium text-gray-700">{t("Lozinka")}<input className="mt-1 w-full px-3 py-2 border rounded-lg" type="password" minLength={8} maxLength={128} required value={password} onChange={(event) => setPassword(event.target.value)} />
     </label>
-    {message && <p className="text-sm text-gray-700" role="status">{message}</p>}
-    <button className="w-full bg-primary text-white py-2 px-4 rounded-lg">{t("Spremi novu lozinku")}</button>
+    {(!token || message) && <p className="text-sm text-gray-700" role="status">{token ? message : t("Poveznica nije ispravna. Zatražite novu poveznicu za resetiranje lozinke.")}</p>}
+    <button disabled={!token} className="w-full bg-primary text-white py-2 px-4 rounded-lg disabled:opacity-50">{t("Spremi novu lozinku")}</button>
   </form>;
 }

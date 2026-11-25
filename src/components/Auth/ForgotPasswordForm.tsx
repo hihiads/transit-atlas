@@ -1,26 +1,11 @@
-import { language, t } from '../../services/i18n';
-import { useState, FormEvent, useEffect, useRef } from 'react';
+import { t } from '../../services/i18n';
+import { useState, FormEvent } from 'react';
 import { forgotPassword } from '../../services/auth';
+import { useTurnstile } from './useTurnstile';
 
 interface ForgotPasswordFormProps {
   onSuccess: () => void;
   onBack: () => void;
-}
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (element: HTMLElement, options: {
-        sitekey: string;
-        action: string;
-        language?: 'hr' | 'en';
-        callback: (token: string) => void;
-        'error-callback': () => void;
-        theme?: 'light' | 'dark';
-      }) => string;
-      reset: (widgetId: string) => void;
-    };
-  }
 }
 
 export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPasswordFormProps) {
@@ -28,50 +13,14 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const turnstileRef = useRef<HTMLDivElement>(null);
-  const widgetIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-    if (!siteKey || !turnstileRef.current) return;
-
-    const script = document.createElement('script');
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-    script.async = true;
-    script.defer = true;
-
-    script.onload = () => {
-      if (window.turnstile && turnstileRef.current) {
-        widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-          sitekey: siteKey,
-          action: 'forgot_password',
-          language,
-          callback: (token: string) => setTurnstileToken(token),
-          'error-callback': () => {
-            setError(t("Turnstile provjera nije uspjela"));
-            setTurnstileToken(null);
-          },
-          theme: 'light'
-        });
-      }
-    };
-
-    document.body.appendChild(script);
-
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-  }, []);
+  const turnstile = useTurnstile('forgot_password');
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
-    if (!turnstileToken) {
+    if (!turnstile.ready) {
       setError(t("Molimo pričekajte Turnstile provjeru"));
       return;
     }
@@ -79,27 +28,16 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
     setLoading(true);
 
     try {
-      const response = await forgotPassword(email, turnstileToken);
+      const response = await forgotPassword(email, turnstile.token);
       setSuccess(response.message);
-
-      // Reset Turnstile
-      if (window.turnstile && widgetIdRef.current) {
-        window.turnstile.reset(widgetIdRef.current);
-      }
-      setTurnstileToken(null);
 
       setTimeout(() => {
         onSuccess();
       }, 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("Greška pri zahtjevu"));
-
-      // Reset Turnstile
-      if (window.turnstile && widgetIdRef.current) {
-        window.turnstile.reset(widgetIdRef.current);
-      }
-      setTurnstileToken(null);
     } finally {
+      turnstile.reset();
       setLoading(false);
     }
   }
@@ -136,11 +74,11 @@ export default function ForgotPasswordForm({ onSuccess, onBack }: ForgotPassword
           <p className="mt-1 text-xs text-gray-500">{t("Poslat će vam se email s uputama za resetiranje lozinke.")}</p>
         </div>
 
-        <div ref={turnstileRef} className="flex justify-center"></div>
+        {turnstile.challenge}
 
         <button
           type="submit"
-          disabled={loading || !turnstileToken}
+          disabled={loading || !turnstile.ready}
           className="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
           {loading ? t("Slanje...") : t("Pošalji upute")}

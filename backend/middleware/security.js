@@ -5,12 +5,13 @@ export const asyncRoute = handler => (req, res, next) => {
   Promise.resolve().then(() => handler(req, res, next)).catch(next);
 };
 
-export function emailActionLimiter({ maxByIp, maxByEmail }) {
+export function emailActionLimiter({ maxByIp, maxByEmail, skipSuccessfulRequests = false }) {
   const options = {
     windowMs: 15 * 60 * 1000,
     message: { error: 'Previše zahtjeva. Pokušajte ponovno kasnije.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    skipSuccessfulRequests
   };
   return [
     rateLimit({ ...options, limit: maxByIp }),
@@ -35,13 +36,11 @@ export const apiLimiter = rateLimit({
   // trust proxy postavljen na serveru
 });
 
-// Strožiji rate limiter za autentifikaciju
-export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  skipSuccessfulRequests: true,
-  message: { error: 'Previše pokušaja. Pokušajte ponovno za 15 minuta.' },
-  standardHeaders: true,
+export const vehiclesLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  message: { error: 'Previše zahtjeva. Pokušajte ponovno kasnije.' },
+  standardHeaders: false,
   legacyHeaders: false,
 });
 

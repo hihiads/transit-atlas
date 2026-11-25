@@ -16,6 +16,9 @@ MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/transit-atlas?retryW
 SESSION_SECRET=<generirajte-48-random-znakova>
 PASSWORD_PEPPER=<generirajte-48-random-znakova>
 ADMIN_PANEL_PASSWORD=<duga-nasumična-lozinka>
+ADMIN_HOST=admin.transitly.eu
+CLOUDFLARE_ACCESS_TEAM_DOMAIN=<tim>.cloudflareaccess.com
+CLOUDFLARE_ACCESS_AUD=<aud-iz-cloudflare-access-aplikacije>
 AUTH_LOGIN_ENABLED=true
 AUTH_REGISTRATION_ENABLED=true
 AUTH_GOOGLE_ENABLED=true
@@ -46,9 +49,19 @@ APPLE_REDIRECT_URI=https://vaša-domena.com
 
 **VAŽNO**: `PORT` varijablu **NE** postavljate - hosting provider automatski postavlja `process.env.PORT`.
 
-Administratorski panel nalazi se na `/admin`. Postavite `ADMIN_PANEL_PASSWORD` i zaštitite `/admin` i `/api/admin` na svim javnim hostnameovima identitetskim pristupom s MFA-om. Admin sesija traje 30 minuta, opoziva se pri odjavi i pohranjena je u memoriji jedne instance. Kod postavljanja više instanci potreban je zajednički store sesija i postavki.
+### Administratorski pristup
 
-Kad su prijava ili registracija uključene, produkcija zahtijeva `MONGODB_URI`, `SESSION_SECRET` i `PASSWORD_PEPPER`. Postavite zasebne tajne od najmanje 32 znaka. Za postojeće račune zadržite pepper s kojim su hashirane njihove lozinke. Postavite točan HTTPS origin aplikacije u `APP_ORIGIN`, HTTPS adresu u `APP_BASE_URL` i SMTP s TLS-om. Turnstile hostname mora odgovarati jednom od originova u `APP_ORIGIN`.
+Dodajte `admin.transitly.eu` kao custom domenu na Renderu i uključite Cloudflare proxy. U Cloudflare Accessu napravite self-hosted aplikaciju za cijeli `admin.transitly.eu`. Dopustite samo imenovane administratore uz MFA. Postavite domenu, Access team domain i Application Audience (AUD) na Renderu. Express provjerava host i potpisani Access token prije posluživanja panela ili `/api/admin` ruta. Otvorite `https://admin.transitly.eu/admin` i nakon Access prijave unesite `ADMIN_PANEL_PASSWORD`. Admin sesija traje 30 minuta i opoziva se pri odjavi. Sesije i ograničenja zahtjeva čuvaju se u memoriji jedne instance. [Cloudflare Access provjera tokena](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
+
+Bez postavki za Access admin rute u produkciji vraćaju 404. Na `transitly.eu`, `www.transitly.eu` i Renderovoj zadanoj domeni provjerite da `/admin` i `/api/admin/settings` vraćaju 404. `/api/system/status` služi provjeri dostupnosti. Detalji feedova dostupni su nakon prijave u panel.
+
+### Cloudflare cache i ograničenje za vozila
+
+Na javnim hostnameovima označite `GET /api/vehicles/zagreb` bez queryja kao *Eligible for cache*. Za Edge TTL i Browser TTL koristite postavke koje poštuju zaglavlja Origina. Zadržite `Origin` u ključu cachea. Uspješni odgovori s vozilima imaju TTL od 10 sekundi na Cloudflareu. Provjerite `CF-Cache-Status` i `Age` ponovljenim čitanjem iste adrese. [Cloudflare Cache Rules](https://developers.cloudflare.com/cache/how-to/cache-rules/settings/)
+
+U Cloudflare WAF-u dodajte rate limit po IP adresi na `starts_with(http.request.uri.path, "/api/vehicles/")` i uključite brojanje odgovora iz cachea. Uskladite prag s limitom aplikacije od 120 zahtjeva u 60 sekundi, ovisno o razdobljima koja podržava vaš plan. Provjerite da `TRUST_PROXY_HOPS` odgovara Renderovu ulaznom proxyju i da se zahtjevi različitih klijenata broje zasebno. [Cloudflare WAF pravilo za ograničenje zahtjeva](https://developers.cloudflare.com/waf/rate-limiting-rules/create-zone-dashboard/)
+
+Kad su prijava ili registracija uključene, produkcija zahtijeva `MONGODB_URI`, `SESSION_SECRET` i `PASSWORD_PEPPER`. Postavite zasebne tajne od najmanje 32 znaka. Za postojeće račune zadržite pepper s kojim su hashirane njihove lozinke. Postavite točan HTTPS origin aplikacije u `APP_ORIGIN`, HTTPS adresu u `APP_BASE_URL` i SMTP s TLS-om. Za prijavu lozinkom, registraciju i zahtjev za resetiranje lozinke postavite produkcijski Turnstile ključ i tajnu. Turnstile hostname mora biti konfigurirani javni HTTPS host aplikacije. Instalirana aplikacija dohvaća widget s tog hosta, pa na uređajima provjerite novi build prije objave. Stare email poveznice s tokenom u queryju treba zamijeniti novim poveznicama.
 
 ## 🔐 Generiranje sigurnih tajni
 

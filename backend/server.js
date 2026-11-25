@@ -13,11 +13,12 @@ import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import secondLookRoutes from './routes/secondlook.js';
-import { apiLimiter, asyncRoute, heavyLimiter } from './middleware/security.js';
+import { apiLimiter, asyncRoute, heavyLimiter, vehiclesLimiter } from './middleware/security.js';
+import { requireAdminAccess } from './middleware/adminAccess.js';
 import { attachUser } from './middleware/auth.js';
 import { activateAuthentication, getAuthenticationSessionMiddleware } from './services/authRuntime.js';
 import { isAuthenticationEnabled, loadRuntimeSettings, missingAuthenticationEnvironment } from './config/runtimeSettings.js';
-import { getAllowedOrigins, isAllowedOrigin } from './config/origins.js';
+import { getAllowedOrigins } from './config/origins.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -39,20 +40,20 @@ if (isProduction) {
   app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
 }
 
-// Sigurnosni headeri
+const cspDirectives = {
+  defaultSrc: ["'self'"],
+  scriptSrc: ["'self'", "'sha256-HGd77+R4X9wA1al+gI4oP7Q6i0LwiO+DgUCFkEmQxcM='", 'challenges.cloudflare.com', 'accounts.google.com'],
+  styleSrc: ["'self'", 'https://accounts.google.com/gsi/style'],
+  styleSrcAttr: ["'unsafe-inline'"],
+  imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+  connectSrc: ["'self'", 'accounts.google.com', 'challenges.cloudflare.com'],
+  frameSrc: ["'self'", 'challenges.cloudflare.com', 'accounts.google.com'],
+  fontSrc: ["'self'", 'data:'],
+};
+
 app.use(helmet({
   crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'sha256-kD560ROsIeuV8jk1zX9ENjBodXU+OWC1CUzXI2u2Cqo='", 'challenges.cloudflare.com', 'accounts.google.com'],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
-      connectSrc: ["'self'", 'accounts.google.com'],
-      frameSrc: ["'self'", 'challenges.cloudflare.com', 'accounts.google.com'],
-      fontSrc: ["'self'", 'data:'],
-    },
-  },
+  contentSecurityPolicy: { directives: cspDirectives },
   hsts: {
     maxAge: 31536000,
     includeSubDomains: true,
@@ -60,35 +61,27 @@ app.use(helmet({
   },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
+app.use((req, res, next) => {
+  res.set('Permissions-Policy', 'camera=(), microphone=(), payment=(), geolocation=(self)');
+  next();
+});
 
-// CORS - samo dozvoljene domene
 const allowedOrigins = getAllowedOrigins();
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || (allowedOrigins.has(origin) && isAllowedOrigin(origin))) {
-      callback(null, true);
-    } else {
-      callback(null, false);
-    }
-  },
-  credentials: true
+app.use(['/api', '/hzpp-api'], (req, res, next) => {
+  res.vary('Origin');
+  next();
+}, cors((req, callback) => {
+  const origin = req.get('origin');
+  const isApi = req.baseUrl.toLowerCase() === '/api';
+  const allow = allowedOrigins.has(origin) && !(isApi && /^\/admin(?:\/|$)/i.test(req.path));
+  callback(null, { origin: allow ? origin : false, credentials: allow && isApi && /^\/auth(?:\/|$)/i.test(req.path) });
 }));
+
+app.use('/api/admin', adminRoutes);
 
 // Body parsing s ograničenjima
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
-
-// Admin prijava ne ovisi o MongoDB-u; auth sesije se dodaju tek kada je auth uključen.
-app.use((req, res, next) => {
-  const middleware = getAuthenticationSessionMiddleware();
-  return middleware ? middleware(req, res, next) : next();
-});
-
-// Dodaj korisnika u request ako postoji sesija
-app.use(attachUser);
-
-app.use('/api/admin', adminRoutes);
 
 // GTFS podatkovni skladište
 let gtfsData = {
@@ -562,14 +555,54 @@ async function fetchRealtimeVehiclesFromZet() {
   }
 }
 
-// API Routes
+app.get('/api/system/status', (req, res) => res.set('Cache-Control', 'no-store').json({ status: 'ok' }));
 
-// Autentifikacija
-app.use('/api/auth', authRoutes);
-app.use('/api', apiLimiter, secondLookRoutes);
+app.get('/api/vehicles/:cityId', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, vehiclesLimiter, asyncRoute(async (req, res) => {
+  const { cityId } = req.params;
 
-// Opći API rate limiter
+  if (cityId === 'hzpp') return res.json({ status: 'unavailable', message: 'HŽPP objavljuje statički vozni red; live lokacije nisu dostupne.', vehicles: [], lastUpdate: Date.now(), source: 'HŽPP GTFS' });
+  if (cityId === 'beograd') return res.json({ status: 'unavailable', message: 'Dostupan je službeni statički GTFS vozni red Beograda. Javni GTFS-Realtime feed vozila nije pronađen.', vehicles: [], lastUpdate: beogradLastUpdate?.getTime() ?? Date.now(), source: 'Beograd GTFS Static' });
+  if (cityId !== 'zagreb') {
+    return res.json({
+      status: 'unavailable',
+      message: 'Podaci za ovaj grad nisu dostupni',
+      vehicles: []
+    });
+  }
+
+  const realtime = await fetchRealtimeVehicles();
+
+  if (realtime === null) {
+    return res.json({
+      status: 'unavailable',
+      message: 'GTFS-Realtime feed nije dostupan',
+      vehicles: [],
+      lastUpdate: Date.now()
+    });
+  }
+
+  res.set({
+    'Cache-Control': 'public, max-age=0, s-maxage=10',
+    'Cloudflare-CDN-Cache-Control': 'public, max-age=10'
+  }).json({
+    status: 'live',
+    message: `Prikazano ${realtime.vehicles.length} vozila uživo`,
+    vehicles: realtime.vehicles,
+    staleVehiclesDropped: realtime.staleVehiclesDropped,
+    lastUpdate: realtimeCacheTime,
+    source: 'gtfs-realtime'
+  });
+}));
+
 app.use('/api', apiLimiter);
+app.use('/api/auth', (req, res, next) => {
+  const middleware = getAuthenticationSessionMiddleware();
+  return middleware ? middleware(req, res, next) : next();
+}, attachUser, authRoutes);
+app.use('/api', secondLookRoutes);
 
 // Gradovi
 app.get('/api/cities', (req, res) => {
@@ -676,41 +709,6 @@ async function buildShapeResponse(data, filePath) {
   });
   return { shapes, status: 'loaded', count: shapes.length };
 }
-
-// Vozila uživo
-app.get('/api/vehicles/:cityId', asyncRoute(async (req, res) => {
-  const { cityId } = req.params;
-
-  if (cityId === 'hzpp') return res.json({ status: 'unavailable', message: 'HŽPP objavljuje statički vozni red; live lokacije nisu dostupne.', vehicles: [], lastUpdate: Date.now(), source: 'HŽPP GTFS' });
-  if (cityId === 'beograd') return res.json({ status: 'unavailable', message: 'Dostupan je službeni statički GTFS vozni red Beograda. Javni GTFS-Realtime feed vozila nije pronađen.', vehicles: [], lastUpdate: beogradLastUpdate?.getTime() ?? Date.now(), source: 'Beograd GTFS Static' });
-  if (cityId !== 'zagreb') {
-    return res.json({
-      status: 'unavailable',
-      message: 'Podaci za ovaj grad nisu dostupni',
-      vehicles: []
-    });
-  }
-
-  const realtime = await fetchRealtimeVehicles();
-
-  if (realtime === null) {
-    return res.json({
-      status: 'unavailable',
-      message: `GTFS-Realtime feed nije dostupan (${rtFeedStatus})`,
-      vehicles: [],
-      lastUpdate: Date.now()
-    });
-  }
-
-  res.json({
-    status: 'live',
-    message: `Prikazano ${realtime.vehicles.length} vozila uživo`,
-    vehicles: realtime.vehicles,
-    staleVehiclesDropped: realtime.staleVehiclesDropped,
-    lastUpdate: Date.now(),
-    source: 'gtfs-realtime'
-  });
-}));
 
 function estimateNextStop(stops, vehicle) {
   const metersPerLongitude = 111_320 * Math.cos(vehicle.lat * Math.PI / 180);
@@ -944,8 +942,7 @@ app.get('/hzpp-api/journey-stops', async (req, res) => {
   res.json({ source: 'GTFS raspored', journeys: matches.slice(0, 1).map(({ stops, route }) => ({ stops, route })) });
 });
 
-// Status sistema
-app.get('/api/system/status', (req, res) => {
+adminRoutes.get('/system/status', (req, res) => {
   res.json({
     gtfsLoaded,
     gtfsLoadError,
@@ -1004,6 +1001,20 @@ app.get('/hzpp/*', (req, res) => {
   if (!existsSync(indexPath)) return res.status(503).send('HŽPP prikaz nije izgrađen. Pokrenite npm run build.');
   res.sendFile(indexPath);
 });
+app.get('/admin', requireAdminAccess, (req, res) => {
+  const indexPath = join(frontendDist, 'index.html');
+  if (!existsSync(indexPath)) return res.status(503).send('Frontend nije izgrađen. Pokrenite npm run build.');
+  res.sendFile(indexPath);
+});
+app.get('/auth/turnstile', helmet.contentSecurityPolicy({
+  directives: { ...cspDirectives, frameAncestors: ['https://localhost', 'capacitor://localhost'] }
+}), (req, res) => {
+  const indexPath = join(frontendDist, 'index.html');
+  if (!existsSync(indexPath)) return res.status(503).send('Frontend nije izgrađen. Pokrenite npm run build.');
+  res.removeHeader('X-Frame-Options');
+  res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex' });
+  res.sendFile(indexPath);
+});
 app.use(express.static(frontendDist));
 app.get('/', (req, res) => {
   const indexPath = join(frontendDist, 'index.html');
@@ -1020,12 +1031,6 @@ app.get(['/verify-email', '/reset-password', '/confirm-parent', '/privacy', '/te
   }
   res.sendFile(indexPath);
 });
-app.get('/admin', (req, res) => {
-  const indexPath = join(frontendDist, 'index.html');
-  if (!existsSync(indexPath)) return res.status(503).send('Frontend nije izgrađen. Pokrenite npm run build.');
-  res.sendFile(indexPath);
-});
-
 // Error handler
 app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Neispravan format zahtjeva.' });
