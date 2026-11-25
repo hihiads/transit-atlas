@@ -14,7 +14,7 @@ import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import secondLookRoutes from './routes/secondlook.js';
 import { apiLimiter, asyncRoute, heavyLimiter, vehiclesLimiter } from './middleware/security.js';
-import { requireAdminAccess } from './middleware/adminAccess.js';
+import { redirectAdminHome, requireAdminAccess } from './middleware/adminAccess.js';
 import { attachUser } from './middleware/auth.js';
 import { activateAuthentication, getAuthenticationSessionMiddleware } from './services/authRuntime.js';
 import { isAuthenticationEnabled, loadRuntimeSettings, missingAuthenticationEnvironment } from './config/runtimeSettings.js';
@@ -1015,6 +1015,7 @@ app.get('/auth/turnstile', helmet.contentSecurityPolicy({
   res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex' });
   res.sendFile(indexPath);
 });
+app.get(['/', '/index.html'], redirectAdminHome);
 app.use(express.static(frontendDist));
 app.get('/', (req, res) => {
   const indexPath = join(frontendDist, 'index.html');

@@ -16,13 +16,14 @@ Object.assign(process.env, {
 });
 
 const { default: adminRoutes } = await import('../routes/admin.js');
-const { requireAdminAccess } = await import('./adminAccess.js');
+const { redirectAdminHome, requireAdminAccess } = await import('./adminAccess.js');
 const { verifyTurnstile } = await import('./turnstile.js');
 const { emailActionLimiter } = await import('./security.js');
 
 const app = express();
 app.set('trust proxy', 1);
 app.get('/admin', requireAdminAccess, (req, res) => res.sendStatus(200));
+app.get(['/', '/index.html'], redirectAdminHome, (req, res) => res.sendStatus(200));
 app.use('/api/admin', adminRoutes);
 app.use(express.json());
 app.post('/verify', verifyTurnstile('login'), (req, res) => res.sendStatus(204));
@@ -54,6 +55,13 @@ test('admin requires its own host and an unused authenticator code before issuin
   assert.equal((await send('/admin', { headers: { host: 'transitly.test' } })).statusCode, 404);
   assert.equal((await send('/api/admin/settings', { headers: { host: 'transitly.test' } })).statusCode, 404);
   assert.equal((await send('/admin', { headers })).statusCode, 200);
+  assert.equal((await send('/', { headers: { host: 'transitly.test' } })).statusCode, 200);
+  for (const path of ['/', '/index.html']) {
+    const redirect = await send(path, { headers });
+    assert.equal(redirect.statusCode, 302);
+    assert.equal(redirect.headers.location, '/admin');
+    assert.equal(redirect.headers['cache-control'], 'no-store');
+  }
   assert.equal((await send('/api/admin/settings', { headers })).statusCode, 401);
   assert.equal((await post({ password, code }, 'https://transitly.test')).statusCode, 403);
   assert.equal((await post({ password })).statusCode, 401);
