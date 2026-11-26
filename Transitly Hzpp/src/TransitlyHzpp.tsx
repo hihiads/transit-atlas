@@ -10,6 +10,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { applyTheme, readTheme } from '../../src/services/theme';
 import { API_ORIGIN } from '../../src/services/platform';
 import { getDevicePosition } from '../../src/services/deviceLocation';
+import { alertsAllowed, requestAlertPermission, showAlert } from '../../src/services/alerts';
 import TransitLoadingAnimation from '../../src/components/TransitLoadingAnimation';
 
 function Icon({ name, size = 16 }: { name: 'swap' | 'clock' | 'locate' | 'login' | 'logout' | 'pin' | 'train' | 'wifi'; size?: number }) {
@@ -128,7 +129,7 @@ export default function TransitlyHzpp() {
     let changed = fresh.length !== trackedTrains.length;
     const next = fresh.map(entry => {
       const journey = journeys.find(item => journeyKeyOf(item) === entry.key);
-      if (!journey || typeof Notification === 'undefined' || Notification.permission !== 'granted') return entry;
+      if (!journey || !alertsAllowed()) return entry;
       const legs = journey.TransportationsWithDelay?.TransportationWithDelay ?? [];
       const delay = Math.max(0, ...legs.map(delayMinutes));
       // Back on time: forget the last delay so the next delay notifies again, even if it has the same length.
@@ -139,10 +140,11 @@ export default function TransitlyHzpp() {
       }
       if (delay === entry.lastNotifiedDelay) return entry;
       const estimatedArrival = Date.parse(journey.ArrivalDateTime) + delayMinutes(legs[legs.length - 1]) * 60000;
-      new Notification(t("Vlak {0} kasni {1} min", entry.numbers, delay), {
-        body: t("Procijenjeni dolazak u {0}: {1} (planirano {2}).", entry.destination, time(estimatedArrival), time(entry.scheduledArrival)),
-        tag: entry.key
-      });
+      showAlert(
+        t("Vlak {0} kasni {1} min", entry.numbers, delay),
+        t("Procijenjeni dolazak u {0}: {1} (planirano {2}).", entry.destination, time(estimatedArrival), time(entry.scheduledArrival)),
+        entry.key
+      );
       changed = true;
       return { ...entry, lastNotifiedDelay: delay };
     });
@@ -174,12 +176,7 @@ export default function TransitlyHzpp() {
       setTrackedTrains(next);
       return;
     }
-    if (typeof Notification === 'undefined') {
-      setMessage(t("Obavijesti nisu podržane u ovom pregledniku."));
-      return;
-    }
-    const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
-    if (permission !== 'granted') {
+    if (!(await requestAlertPermission())) {
       setMessage(t("Dozvola za obavijesti nije odobrena."));
       return;
     }

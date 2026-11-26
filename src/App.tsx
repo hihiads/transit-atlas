@@ -18,6 +18,7 @@ import { readStoredStringList } from './services/localPreferences';
 import { applyTheme, readTheme } from './services/theme';
 import { getDevicePosition } from './services/deviceLocation';
 import { isNativeApp } from './services/platform';
+import { alertsAllowed, showAlert } from './services/alerts';
 import TransitLoadingAnimation from './components/TransitLoadingAnimation';
 
 function App() {
@@ -64,7 +65,7 @@ function App() {
   useEffect(() => {
     const checkTrackedDepartures = () => {
       if (isNativeApp()) return;
-      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      if (!alertsAllowed()) return;
       if (!user) return;
       const tracked = readStoredStringList(`transit-atlas-tracked:${user.id}`);
       const now = new Date();
@@ -84,7 +85,7 @@ function App() {
         const moment = mins <= 10 && mins >= 0 ? 'soon' : mins < 0 && mins >= -1 ? 'now' : '';
         const key = `transit-notified:${now.toDateString()}:${item}:${moment}`;
         if (moment && !sessionStorage.getItem(key)) {
-          new Notification(moment === 'soon' ? t("Polazak za 10 minuta") : t("Vrijeme polaska"), { body: t("Praćeni polazak je u {0}. Otvorite Transitly za stanje.", time.slice(0, 5)) });
+          showAlert(moment === 'soon' ? t("Polazak za 10 minuta") : t("Vrijeme polaska"), t("Praćeni polazak je u {0}. Otvorite Transitly za stanje.", time.slice(0, 5)), item);
           sessionStorage.setItem(key, '1');
         }
       }

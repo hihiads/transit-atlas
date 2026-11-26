@@ -8,11 +8,13 @@ import LegalPage from './components/LegalPage';
 import ParentConsentPage from './components/ParentConsentPage';
 import AccountDeletionPage from './components/AccountDeletionPage';
 import { localizeDocument } from './services/i18n';
+import { registerAlertWorker } from './services/alerts';
 import { NativeTurnstilePage } from './components/Auth/useTurnstile';
 import './index.css';
 import 'leaflet/dist/leaflet.css';
 
 localizeDocument();
+registerAlertWorker();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
