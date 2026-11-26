@@ -9,6 +9,7 @@ import { join } from 'path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { fetchFeed, extractFeed } from './services/gtfsArchive.js';
+import { estimateNextStop, vehicleHasPassedStop } from './services/vehiclePosition.js';
 import { parse } from 'csv-parse/sync';
 import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
@@ -826,32 +827,14 @@ async function buildShapeResponse(data, filePath) {
   return { shapes, status: 'loaded', count: shapes.length };
 }
 
-function estimateNextStop(stops, vehicle) {
-  const metersPerLongitude = 111_320 * Math.cos(vehicle.lat * Math.PI / 180);
-  const points = stops.map(stop => ({
-    x: (stop.lon - vehicle.lon) * metersPerLongitude,
-    y: (stop.lat - vehicle.lat) * 111_320
-  }));
-  const candidates = [];
-  for (let index = 1; index < points.length; index++) {
-    const start = points[index - 1];
-    const end = points[index];
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const length = Math.hypot(dx, dy);
-    if (!Number.isFinite(length) || length === 0) continue;
-    const fraction = Math.max(0, Math.min(1, -(start.x * dx + start.y * dy) / (length * length)));
-    const distance = Math.hypot(start.x + fraction * dx, start.y + fraction * dy);
-    const nextIndex = Math.hypot(start.x, start.y) <= 35 ? index - 1 : index;
-    candidates.push({ distance, nextIndex });
+function tripStopsFor(data, tripId) {
+  const entries = data.stopTimesByTrip?.get(String(tripId).trim()) ?? [];
+  const stops = [];
+  for (let index = 0; index < entries.length; index += 2) {
+    const stop = data.stops[entries[index]];
+    if (stop) stops.push({ id: String(stop.stop_id), sequence: entries[index + 1], lat: Number(stop.stop_lat), lon: Number(stop.stop_lon) });
   }
-  candidates.sort((a, b) => a.distance - b.distance);
-  const closest = candidates[0];
-  if (!closest || closest.distance > 180) return null;
-  const plausible = candidates.filter(item => item.distance <= closest.distance + 25);
-  const earliest = Math.min(...plausible.map(item => item.nextIndex));
-  const latest = Math.max(...plausible.map(item => item.nextIndex));
-  return latest - earliest > 1 ? null : stops[earliest].sequence;
+  return stops.sort((a, b) => a.sequence - b.sequence);
 }
 
 app.get('/api/vehicle/:vehicleId', asyncRoute(async (req, res) => {
@@ -962,9 +945,10 @@ app.get('/api/:cityId/stop/:stopId/departures', asyncRoute(async (req, res) => {
       }
 
       const vehicle = source === 'scheduled' ? realtime?.vehiclesByTrip.get(tripId) : null;
-      if (vehicle && scheduledAt >= now - 3 * 60 * 1000 && scheduledAt <= now + 12 * 60 * 1000 &&
+      const stopSequence = Number(st.stop_sequence);
+      if (vehicle && stopSequence > 0 && scheduledAt >= now - 3 * 60 * 1000 && scheduledAt <= now + 12 * 60 * 1000 &&
           Date.now() - vehicle.lastUpdate <= 2 * 60 * 1000 &&
-          !(Number(vehicle.currentStopSequence) > 0 && Number(st.stop_sequence) > 0 && Number(vehicle.currentStopSequence) > Number(st.stop_sequence))) {
+          !vehicleHasPassedStop(vehicle, stopSequence, () => tripStopsFor(data, tripId))) {
         const distance = metersBetween(vehicle.lat, vehicle.lon, stopLat, stopLon);
         if (distance <= 12000) {
           const measuredSpeed = Number(vehicle.speed);
