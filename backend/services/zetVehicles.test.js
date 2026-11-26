@@ -8,6 +8,7 @@ test('extracts ZET fleet numbers from the official realtime feed', () => {
   assert.equal(zetVehicleId('XTIX2PT030_10344'), '10344');
   assert.equal(zetVehicleId('rt_trip_42'), null);
   assert.equal(zetVehicleId('other', { id: '36' }), '36');
+  assert.equal(zetVehicleId('X3JX2PT0D8_42', { id: '36' }), '36');
 });
 
 test('accepts a live trip and a predefined report reason, rejecting client-supplied announcement fields', () => {

@@ -15,6 +15,7 @@ import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import { zetVehicleId } from './services/zetFleet.js';
+import { getBusRegistration } from './services/busRegistrations.js';
 import { readVehicleNotices, recordVehicleReport, validateVehicleReport } from './services/vehicleReports.js';
 import User from './models/User.js';
 import { auditDashboard, cleanText, dashboardCollection, feedbackCollection, listBulletins, markRareVehicles, readDashboardSettings } from './services/dashboard.js';
@@ -836,6 +837,20 @@ function tripStopsFor(data, tripId) {
   }
   return stops.sort((a, b) => a.sequence - b.sequence);
 }
+
+app.get('/api/vehicle/:vehicleId/registration', asyncRoute(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const { vehicleId } = req.params;
+  if (!/^[\w.-]{1,100}$/.test(vehicleId)) return res.sendStatus(400);
+  const empty = { registrationNumber: null, source: null };
+  if ((await readDashboardSettings()).hideLiveVehicles) return res.json(empty);
+  const realtime = await fetchRealtimeVehicles();
+  const vehicle = realtime?.vehicles.find(item => item.id === vehicleId);
+  if (!vehicle || vehicle.type !== 'bus') return res.json(empty);
+  if (vehicle.registrationNumber) return res.json({ registrationNumber: vehicle.registrationNumber, source: 'zet' });
+  const registrationNumber = vehicle.zetId ? await getBusRegistration(vehicle.zetId) : null;
+  res.json(registrationNumber ? { registrationNumber, source: 'autobusi.org' } : empty);
+}));
 
 app.get('/api/vehicle/:vehicleId', asyncRoute(async (req, res) => {
   res.set('Cache-Control', 'no-store');
