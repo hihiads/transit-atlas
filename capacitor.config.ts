@@ -9,6 +9,10 @@ const config: CapacitorConfig = {
   plugins: {
     LocalNotifications: {
       presentationOptions: ['sound', 'banner', 'list']
+    },
+    PushNotifications: {
+      // Show remote alerts (late, early, arriving) also while the app is open.
+      presentationOptions: ['badge', 'sound', 'alert']
     }
   }
 };

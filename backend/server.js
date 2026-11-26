@@ -10,6 +10,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { fetchFeed, extractFeed } from './services/gtfsArchive.js';
 import { estimateNextStop, vehicleHasPassedStop } from './services/vehiclePosition.js';
+import { pushConfigured } from './services/apns.js';
+import { checkWatches, ensureWatchIndexes, notifyAdminDevices } from './services/pushWatches.js';
+import { createPushRouter } from './routes/push.js';
 import { parse } from 'csv-parse/sync';
 import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
@@ -704,8 +707,34 @@ app.post('/api/feedback', requireTrustedOrigin, rateLimit({ ...feedbackLimit, li
     }
     const now = new Date();
     await (await feedbackCollection()).insertOne({ category, area, text, state: 'open', createdAt: now, expiresAt: new Date(+now + 30 * 86400_000) });
+    // Push to admin iPhones so the report can be reviewed; a failed push never fails the report.
+    notifyAdminDevices({ title: 'Nova prijava u Transitlyju', body: `${category} · ${area}: ${text.slice(0, 120)}`, data: { type: 'feedback' } })
+      .catch(error => console.error('Feedback push failed:', error.name));
     res.set('Cache-Control', 'no-store').status(201).json({ message: 'Prijava je zaprimljena.' });
   }));
+
+// iPhone push: device registration and departure watches (see routes/push.js).
+app.use('/api/push', apiLimiter, createPushRouter({
+  resolveStop(cityId, tripId, stopId) {
+    if (cityId !== 'zagreb' || !gtfsLoaded) return null;
+    const entry = tripStopsFor(gtfsData, tripId).find(stop => stop.id === stopId);
+    const trip = gtfsData.tripsById?.get(tripId);
+    if (!entry || !trip) return null;
+    const route = gtfsData.routesById?.get(String(trip.route_id));
+    return {
+      stopSequence: entry.sequence,
+      stopName: gtfsData.stopsById.get(stopId)?.stop_name || stopId,
+      line: route?.route_short_name || 'N/A'
+    };
+  }
+}));
+
+// Stop sequence the vehicle is at or heading to: reported by ZET, otherwise estimated from its position.
+function currentSequenceFor(vehicle) {
+  const reported = Number(vehicle.currentStopSequence);
+  if (reported > 0) return reported;
+  return estimateNextStop(tripStopsFor(gtfsData, vehicle.tripId), vehicle);
+}
 
 function publicStatus(options) {
   return {
@@ -1184,6 +1213,17 @@ app.use((err, req, res, next) => {
   console.error('Request failed:', err.name);
   res.status(500).json({ error: 'Interna greška servera' });
 });
+
+// iPhone departure watches: check realtime data once a minute and push late, early and arriving alerts.
+if (pushConfigured && process.env.MONGODB_URI) {
+  ensureWatchIndexes().catch(error => console.error('Push index setup failed:', error.name));
+  setInterval(() => {
+    void (async () => {
+      const realtime = await fetchRealtimeVehicles();
+      await checkWatches({ realtime, now: Date.now(), resolveSequence: currentSequenceFor });
+    })().catch(error => console.error('Push watch check failed:', error.name));
+  }, 60_000).unref();
+}
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log('');

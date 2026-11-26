@@ -1,6 +1,7 @@
 import { locale, t } from './i18n';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { addDepartureWatch, ensureIphonePushRegistered, enableIphonePush, removeDepartureWatch } from './push';
 
 function notificationIds(key: string) {
   let hash = 2166136261;
@@ -28,11 +29,15 @@ export async function requestDepartureNotificationPermission() {
       visibility: 1
     });
   }
+  if (permission.display === 'granted') await enableIphonePush().catch(() => false);
   return permission.display === 'granted';
 }
 
 export async function scheduleDepartureReminders(key: string, timestamp: number, route: string, direction: string) {
   if (!Capacitor.isNativePlatform()) return;
+  // Live delay and arrival alerts come from the server; re-register the device and send the watch.
+  await ensureIphonePushRegistered().catch(() => false);
+  await addDepartureWatch(key).catch(() => {});
   const now = Date.now();
   const [tenMinuteId, departureId] = notificationIds(key);
   const notifications = [];
@@ -64,4 +69,5 @@ export async function cancelDepartureReminders(key: string) {
   if (!Capacitor.isNativePlatform()) return;
   const [first, second] = notificationIds(key);
   await LocalNotifications.cancel({ notifications: [{ id: first }, { id: second }] });
+  await removeDepartureWatch(key).catch(() => {});
 }
