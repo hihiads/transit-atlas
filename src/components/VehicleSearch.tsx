@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
+import RareVehicleFollows from './RareVehicleFollows';
 import { t } from '../services/i18n';
 import type { Vehicle } from '../types';
 
@@ -9,6 +10,7 @@ export default function VehicleSearch({ vehicles, onSelect, onClose }: {
   onClose: () => void;
 }) {
   const [query, setQuery] = useState('');
+  const [showFollows, setShowFollows] = useState(false);
   const term = query.trim().toUpperCase();
   const matches = term ? vehicles.flatMap(vehicle => {
     const ids = [vehicle.zetId, vehicle.garageNumber, vehicle.id].flatMap(id => id ? [id.toUpperCase()] : []);
@@ -38,6 +40,10 @@ export default function VehicleSearch({ vehicles, onSelect, onClose }: {
           </button>
         </li>)}
       </ul>}
+      {!term && <details className="mt-2 border-t border-slate-200 pt-2" onToggle={event => setShowFollows(event.currentTarget.open)}>
+        <summary className="cursor-pointer rounded-lg px-2 py-2 text-sm font-semibold">{t("Praćenje rijetkih vozila")}</summary>
+        {showFollows && <RareVehicleFollows />}
+      </details>}
       {matches.length > 24 && <p className="px-3 pt-2 text-xs text-slate-600">{t("Suzi pretragu za više rezultata.")}</p>}
     </section>
   );

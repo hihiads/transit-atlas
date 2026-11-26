@@ -17,13 +17,14 @@ import { zetVehicleId } from './services/zetFleet.js';
 import { readVehicleNotices, recordVehicleReport, validateVehicleReport } from './services/vehicleReports.js';
 import User from './models/User.js';
 import { auditDashboard, cleanText, dashboardCollection, feedbackCollection, listBulletins, markRareVehicles, readDashboardSettings } from './services/dashboard.js';
+import { alertRareVehicleFollowers } from './services/rareVehicleAlerts.js';
 import { readAnnouncement } from './services/siteAnnouncement.js';
 import secondLookRoutes from './routes/secondlook.js';
 import { apiLimiter, asyncRoute, heavyLimiter, vehiclesLimiter } from './middleware/security.js';
 import { redirectAdminHome, requireAdminAccess } from './middleware/adminAccess.js';
 import { attachUser, requireAuth } from './middleware/auth.js';
 import { activateAuthentication, getAuthenticationSessionMiddleware } from './services/authRuntime.js';
-import { isAuthenticationEnabled, loadRuntimeSettings, missingAuthenticationEnvironment } from './config/runtimeSettings.js';
+import { getRuntimeSettings, isAuthenticationEnabled, loadRuntimeSettings, missingAuthenticationEnvironment } from './config/runtimeSettings.js';
 import { getAllowedOrigins, requireTrustedOrigin } from './config/origins.js';
 
 const app = express();
@@ -462,13 +463,27 @@ async function fetchRealtimeVehicles() {
   }
 }
 
+let watchingRareVehicles = false;
 setInterval(async () => {
-  if (!process.env.MONGODB_URI || Date.now() - realtimeCacheTime < 55_000 || realtimeFetchPromise) return;
+  if (!process.env.MONGODB_URI || watchingRareVehicles) return;
+  watchingRareVehicles = true;
   try {
     const catalog = await dashboardCollection('dashboard_rare_vehicles');
-    if (await catalog.findOne({ rare: true }, { projection: { _id: 1 }, maxTimeMS: 2000 })) await fetchRealtimeVehicles();
+    const currentEntries = await catalog.find({ rare: true }, { projection: { type: 1, model: 1 }, maxTimeMS: 2000 }).toArray();
+    if (!currentEntries.length) return;
+    const realtime = Date.now() - realtimeCacheTime < 55_000 ? realtimeCache : await fetchRealtimeVehicles();
+    if (realtime && getRuntimeSettings().loginEnabled && !(await readDashboardSettings()).hideLiveVehicles) {
+      const byId = new Map(currentEntries.map(entry => [entry._id, entry]));
+      const sightings = realtime.vehicles.flatMap(vehicle => {
+        const entry = byId.get(vehicle.zetId);
+        return entry?.type === vehicle.type ? [{ ...vehicle, rare: true, model: entry.model }] : [];
+      });
+      await alertRareVehicleFollowers(sightings);
+    }
   } catch (error) {
     console.error('[Rare vehicles monitor]', error.name);
+  } finally {
+    watchingRareVehicles = false;
   }
 }, 60_000).unref();
 

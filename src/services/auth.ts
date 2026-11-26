@@ -75,6 +75,24 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data;
 }
 
+export interface RareFollows {
+  enabled: boolean;
+  vehicles: { id: string; model: string; followed: boolean; available: boolean }[];
+}
+
+export async function getRareVehicleFollows(signal?: AbortSignal): Promise<RareFollows> {
+  const response = await fetch(`${API_BASE}/api/auth/rare-follows`, { credentials: 'include', signal });
+  return handleResponse<RareFollows>(response);
+}
+
+export async function setRareVehicleFollow(id: string, follow: boolean): Promise<{ followed: boolean }> {
+  const response = await fetch(`${API_BASE}/api/auth/rare-follows/${encodeURIComponent(id)}`, {
+    method: follow ? 'PUT' : 'DELETE', headers: jsonHeaders, credentials: 'include',
+    ...(follow ? { body: JSON.stringify({ language }) } : {})
+  });
+  return handleResponse<{ followed: boolean }>(response);
+}
+
 export async function reportVehicle(vehicleId: string, tripId: string, reason: 'breakdown' | 'delay'): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE}/api/auth/vehicle-reports`, {
     method: 'POST', headers: jsonHeaders, credentials: 'include',

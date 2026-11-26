@@ -1,5 +1,10 @@
 import mongoose from 'mongoose';
 
+const rareVehicleFollowSchema = new mongoose.Schema({
+  vehicleId: { type: String, required: true },
+  language: { type: String, enum: ['hr', 'en'], required: true }
+}, { _id: false });
+
 const userSchema = new mongoose.Schema({
   email: {
     type: String,
@@ -28,6 +33,8 @@ const userSchema = new mongoose.Schema({
   guardianConsentAt: { type: Date, default: null },
   termsVersion: { type: String, default: null },
   termsAcceptedAt: { type: Date, default: null },
+  rareVehicleFollows: { type: [rareVehicleFollowSchema], default: undefined, select: false },
+  rareAlertDay: { type: new mongoose.Schema({ date: String, vehicles: [String] }, { _id: false }), select: false },
   vehicleReportsBlockedUntil: { type: Date, select: false },
   sessionVersion: {
     type: Number,
@@ -57,6 +64,7 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
+userSchema.index({ 'rareVehicleFollows.vehicleId': 1 }, { sparse: true });
 userSchema.index({ emailVerificationToken: 1 }, { sparse: true });
 userSchema.index({ passwordResetToken: 1 }, { sparse: true });
 userSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400, partialFilterExpression: { emailVerified: false } });

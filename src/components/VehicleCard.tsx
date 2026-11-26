@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { reportVehicle } from '../services/auth';
+import RareVehicleFollows from './RareVehicleFollows';
 import VehicleIdentifiers from './VehicleIdentifiers';
 import { relativeUpdateTime, t } from '../services/i18n';
 import { Vehicle } from '../types';
@@ -71,6 +72,7 @@ export default function VehicleCard({ vehicle, onClose, onViewProfile, onRequire
           </div>
 
           <VehicleIdentifiers vehicle={vehicle} />
+          {vehicle.rare && vehicle.zetId && <RareVehicleFollows vehicleId={vehicle.zetId} onRequireLogin={onRequireLogin} />}
 
           {vehicle.model && !vehicle.rare && !vehicle.modelSource && (
             <div>

@@ -1,11 +1,14 @@
 import { isDev } from '../config/env.js';
+import rateLimit from 'express-rate-limit';
+import { dashboardCollection } from '../services/dashboard.js';
+import { maxRareFollows } from '../services/rareVehicleAlerts.js';
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import User from '../models/User.js';
 import { hashPassword, verifyPassword, generateToken, hashToken } from '../utils/crypto.js';
 import { verifyTurnstile } from '../middleware/turnstile.js';
 import { requireAuth } from '../middleware/auth.js';
-import { sendParentalConsentEmail, sendPasswordResetEmail, sendVerificationEmail } from '../services/email.js';
+import { hasRareVehicleMail, sendParentalConsentEmail, sendPasswordResetEmail, sendVerificationEmail } from '../services/email.js';
 import PendingRegistration from '../models/PendingRegistration.js';
 import { randomBytes } from 'crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -526,6 +529,49 @@ router.get('/me', requireLogin, requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Greška pri dohvaćanju korisnika' });
   }
 });
+
+const rareFollowLimiter = rateLimit({
+  windowMs: 60_000, limit: 24, keyGenerator: req => req.session.userId, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Previše zahtjeva. Pokušajte kasnije.' }
+});
+
+router.get('/rare-follows', requireLogin, requireAuth, asyncRoute(async (req, res) => {
+  const catalog = await dashboardCollection('dashboard_rare_vehicles');
+  const [user, vehicles] = await Promise.all([
+    User.findById(req.session.userId).select('emailVerified +rareVehicleFollows').lean(),
+    catalog.find({ rare: true }, { projection: { model: 1 } }).sort({ model: 1 }).toArray()
+  ]);
+  if (!user?.emailVerified) return res.sendStatus(403);
+  const follows = new Set((user.rareVehicleFollows ?? []).map(follow => follow.vehicleId));
+  const options = vehicles.map(vehicle => ({ id: vehicle._id, model: vehicle.model, followed: follows.delete(vehicle._id), available: true }));
+  for (const id of follows) options.push({ id, model: '', followed: true, available: false });
+  res.json({ enabled: hasRareVehicleMail(), vehicles: options });
+}));
+
+router.put('/rare-follows/:id', requireLogin, requireAuth, rareFollowLimiter, asyncRoute(async (req, res) => {
+  const id = req.params.id;
+  const { language } = req.body ?? {};
+  if (!/^\d{1,8}$/.test(id) || !['hr', 'en'].includes(language)) return res.sendStatus(400);
+  if (!hasRareVehicleMail()) return res.status(503).json({ error: 'Obavijesti e-poštom trenutačno nisu dostupne.' });
+  if (!await (await dashboardCollection('dashboard_rare_vehicles')).findOne({ _id: id, rare: true }, { projection: { _id: 1 } })) {
+    return res.status(404).json({ error: 'Vozilo više nije u katalogu rijetkih vozila.' });
+  }
+  const userId = req.session.userId;
+  const result = await User.updateOne({
+    _id: userId, emailVerified: true, 'rareVehicleFollows.vehicleId': { $ne: id },
+    $expr: { $lt: [{ $size: { $ifNull: ['$rareVehicleFollows', []] } }, maxRareFollows] }
+  }, { $push: { rareVehicleFollows: { vehicleId: id, language } } });
+  if (!result.modifiedCount && !await User.exists({ _id: userId, emailVerified: true, 'rareVehicleFollows.vehicleId': id })) {
+    return res.status(409).json({ error: 'Možete pratiti najviše 10 rijetkih vozila.' });
+  }
+  res.json({ followed: true });
+}));
+
+router.delete('/rare-follows/:id', requireLogin, requireAuth, rareFollowLimiter, asyncRoute(async (req, res) => {
+  if (!/^\d{1,8}$/.test(req.params.id)) return res.sendStatus(400);
+  await User.updateOne({ _id: req.session.userId }, { $pull: { rareVehicleFollows: { vehicleId: req.params.id } } });
+  res.json({ followed: false });
+}));
 
 // Verifikacija emaila
 router.post('/verify-email',
