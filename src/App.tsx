@@ -69,16 +69,16 @@ function App() {
       const tracked = readStoredStringList(`transit-atlas-tracked:${user.id}`);
       const now = new Date();
       for (const item of tracked) {
-        const match = item.match(/:(\d{2}:\d{2}:\d{2})(?::(\d{10,13}))?$/);
+        // Keys end with HH:MM and the departure epoch in ms (cityId:stopId:tripId:HH:MM:timestamp); older keys may carry seconds.
+        const match = item.match(/:(\d{2}):(\d{2})(?::\d{2})?(?::(\d{10,13}))?$/);
         if (!match) continue;
-        const time = match[1];
-        const scheduledTimestamp = Number(match[2]);
+        const time = `${match[1]}:${match[2]}`;
+        const scheduledTimestamp = Number(match[3]);
         const departure = Number.isFinite(scheduledTimestamp) && scheduledTimestamp > 0
           ? new Date(scheduledTimestamp)
           : new Date(now);
         if (!scheduledTimestamp) {
-          const [hour, minute] = time.split(':').map(Number);
-          departure.setHours(hour, minute, 0, 0);
+          departure.setHours(Number(match[1]), Number(match[2]), 0, 0);
         }
         const mins = Math.round((departure.getTime() - now.getTime()) / 60000);
         const moment = mins <= 10 && mins >= 0 ? 'soon' : mins < 0 && mins >= -1 ? 'now' : '';
