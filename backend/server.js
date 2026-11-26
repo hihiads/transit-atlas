@@ -1,6 +1,7 @@
 import { hasStrongAdminPassword, isDev } from './config/env.js';
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import GtfsRealtimeBindings from 'gtfs-realtime-bindings';
 import { createReadStream, existsSync, readFileSync } from 'fs';
@@ -12,14 +13,16 @@ import { parse } from 'csv-parse/sync';
 import { parse as parseStream } from 'csv-parse';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
+import { zetVehicleId } from './services/zetFleet.js';
+import { readVehicleNotices, recordVehicleReport, validateVehicleReport } from './services/vehicleReports.js';
 import { readAnnouncement } from './services/siteAnnouncement.js';
 import secondLookRoutes from './routes/secondlook.js';
 import { apiLimiter, asyncRoute, heavyLimiter, vehiclesLimiter } from './middleware/security.js';
 import { redirectAdminHome, requireAdminAccess } from './middleware/adminAccess.js';
-import { attachUser } from './middleware/auth.js';
+import { attachUser, requireAuth } from './middleware/auth.js';
 import { activateAuthentication, getAuthenticationSessionMiddleware } from './services/authRuntime.js';
 import { isAuthenticationEnabled, loadRuntimeSettings, missingAuthenticationEnvironment } from './config/runtimeSettings.js';
-import { getAllowedOrigins } from './config/origins.js';
+import { getAllowedOrigins, requireTrustedOrigin } from './config/origins.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -526,8 +529,10 @@ async function fetchRealtimeVehiclesFromZet() {
           continue;
         }
 
+        const fleetId = zetVehicleId(entity.id || '', vehicle.vehicle);
         vehicles.push({
           id: vehicleId,
+          zetId: fleetId,
           type: routeType === 0 ? 'tram' : routeType === 3 ? 'bus' : 'unknown',
           line: route?.route_short_name || vehicle.trip?.routeId || 'N/A',
           direction: trip?.trip_headsign || route?.route_long_name || 'Nepoznato',
@@ -535,7 +540,7 @@ async function fetchRealtimeVehiclesFromZet() {
           lon: pos.longitude,
           lastUpdate,
           garageNumber: vehicle.vehicle?.label || null,
-          registrationNumber: vehicle.vehicle?.licensePlate || null,
+          registrationNumber: routeType === 3 ? vehicle.vehicle?.licensePlate || null : null,
           currentStopSequence: Object.hasOwn(vehicle, 'currentStopSequence') ? vehicle.currentStopSequence : null,
           currentStatus: Object.hasOwn(vehicle, 'currentStatus') ? vehicle.currentStatus : null,
           currentStopId: vehicle.stopId || null,
@@ -601,14 +606,46 @@ app.get('/api/vehicles/:cityId', (req, res, next) => {
 }));
 
 app.use('/api', apiLimiter);
-app.use('/api/auth', (req, res, next) => {
+function useAuthSession(req, res, next) {
   const middleware = getAuthenticationSessionMiddleware();
   return middleware ? middleware(req, res, next) : next();
-}, attachUser, authRoutes);
+}
+
+const reportLimit = {
+  windowMs: 10 * 60 * 1000,
+  message: { error: 'Previše prijava. Pokušajte kasnije.' },
+  standardHeaders: true,
+  legacyHeaders: false
+};
+app.post('/api/auth/vehicle-reports', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, requireTrustedOrigin, rateLimit({ ...reportLimit, limit: 30 }), useAuthSession, requireAuth,
+rateLimit({ ...reportLimit, limit: 6, keyGenerator: req => req.session.userId }), asyncRoute(async (req, res) => {
+  const report = req.is('application/json') && validateVehicleReport(req.body);
+  if (!report) return res.status(400).json({ error: 'Odaberite vozilo i razlog prijave.' });
+  if (!isAuthenticationEnabled()) return res.status(403).json({ error: 'Ova značajka trenutačno nije dostupna.' });
+  const realtime = await fetchRealtimeVehicles();
+  if (!realtime) return res.status(503).json({ error: 'Podaci uživo trenutačno nisu dostupni.' });
+  const vehicle = realtime.vehicles.find(item => item.id === report.vehicleId && item.tripId === report.tripId);
+  if (!vehicle || !['bus', 'tram'].includes(vehicle.type) || !/^[A-Za-z0-9-]{1,16}$/.test(vehicle.line)) {
+    return res.status(404).json({ error: 'Vozilo više nije u podacima uživo.' });
+  }
+  if (!await recordVehicleReport(vehicle, req.session.userId, report.reason)) {
+    return res.status(409).json({ error: 'Već ste prijavili ovu vožnju.' });
+  }
+  res.status(201).json({ message: 'Prijava je zaprimljena.' });
+}));
+
+app.use('/api/auth', useAuthSession, attachUser, authRoutes);
 app.use('/api', secondLookRoutes);
 
 app.get('/api/announcement', asyncRoute(async (req, res) => {
-  res.set('Cache-Control', 'no-store').json({ announcement: await readAnnouncement() });
+  const [announcement, vehicleNotices] = await Promise.all([readAnnouncement(), readVehicleNotices().catch(error => {
+    console.error('[VehicleReports] ' + error.name);
+    return [];
+  })]);
+  res.set('Cache-Control', 'no-store').json({ announcement, vehicleNotices });
 }));
 
 // Gradovi

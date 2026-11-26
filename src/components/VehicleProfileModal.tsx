@@ -1,6 +1,7 @@
 import { t } from '../services/i18n';
 import { useEffect, useState } from 'react';
 import { Vehicle, VehicleProfile } from '../types';
+import VehicleIdentifiers from './VehicleIdentifiers';
 import { api } from '../api';
 
 interface VehicleProfileModalProps {
@@ -53,15 +54,16 @@ export default function VehicleProfileModal({ vehicle, onClose }: VehicleProfile
           if (event.key === 'Escape') onClose();
           if (event.key === 'Tab') {
             event.preventDefault();
-            const button = event.currentTarget.querySelector('button');
-            const list = event.currentTarget.querySelector('ol');
-            (event.target === button && list ? list : button)?.focus();
+            const elements = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button, a[href], ol[tabindex]'));
+            const focused = elements.indexOf(document.activeElement as HTMLElement);
+            const next = (focused + (event.shiftKey ? elements.length - 1 : 1)) % elements.length;
+            elements[next]?.focus();
           }
         }}
         className="flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white text-slate-900 shadow-xl sm:rounded-2xl">
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
-            <p className="text-sm text-slate-600">{typeLabel}{details.garageNumber && ` · ${details.garageNumber}`}</p>
+            <p className="text-sm text-slate-600">{typeLabel}</p>
             <h2 id="vehicle-profile-title" className="text-xl font-bold">{t("Linija") + " "}{details.line}</h2>
             <p className="text-sm text-slate-600">{details.direction}</p>
           </div>
@@ -69,7 +71,8 @@ export default function VehicleProfileModal({ vehicle, onClose }: VehicleProfile
         </header>
 
         <div className="min-h-0 overflow-y-auto px-5 py-4">
-          <h3 className="mb-3 text-base font-semibold">{t("Stanice na ovoj vožnji")}</h3>
+          <VehicleIdentifiers vehicle={details} />
+          <h3 className="mt-4 mb-3 text-base font-semibold">{t("Stanice na ovoj vožnji")}</h3>
           {error && <p role="status" className="mb-3 text-sm text-slate-600">
             {profile ? t("Osvježavanje nije uspjelo. Prikazani su zadnji dostupni podaci.") : t("Stanice trenutačno nije moguće učitati.")}
           </p>}

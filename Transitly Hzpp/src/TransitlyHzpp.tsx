@@ -1,3 +1,4 @@
+import { Search } from 'lucide-react';
 import { locale, t } from '../../src/services/i18n';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import AuthModal from '../../src/components/Auth/AuthModal';
@@ -86,6 +87,8 @@ export default function TransitlyHzpp() {
   const [locationBusy, setLocationBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [showAuth, setShowAuth] = useState(false);
+  const [showTrainSearch, setShowTrainSearch] = useState(false);
+  const [trainNumber, setTrainNumber] = useState('');
   const [showSiteMenu, setShowSiteMenu] = useState(false);
   const [darkMode, setDarkMode] = useState(() => readTheme() === 'dark');
   const [expandedJourney, setExpandedJourney] = useState<string | null>(null);
@@ -202,13 +205,18 @@ export default function TransitlyHzpp() {
     }
   }
 
+  const trainQuery = trainNumber.trim().toUpperCase();
+  const isToday = search?.date === zagrebDate();
+  const shownJourneys = trainQuery ? journeys.filter(journey => journey.TransportationsWithDelay?.TransportationWithDelay
+    ?.some(leg => String(leg.Number ?? '').toUpperCase().startsWith(trainQuery))) : journeys;
+
   if (loadingStations) return <div className="transit-loader-page"><TransitLoadingAnimation mode="train" label={t("Učitavamo HŽPP stanice…")} /></div>;
 
   return <main className="app-shell">
     <header className="topbar">
       <div className="brand-group"><a className="brand" href="/" aria-label={t("Transitly početna stranica")}><span className="brand-icon"><Icon name="train" size={21} /></span></a><label className="sr-only" htmlFor="hzpp-provider">{t("Odaberi prijevoznika")}</label><select id="hzpp-provider" aria-label={t("Odaberi prijevoznika")} value="hzpp" onChange={event => { if (event.target.value === 'zet') window.location.assign('/'); }}><option value="zet">ZET</option><option value="hzpp">HŽPP</option></select>
         <div className="site-menu-wrap">
-          <button className="top-action menu-button" type="button" aria-expanded={showSiteMenu} aria-controls="hzpp-site-menu" onClick={() => setShowSiteMenu(open => !open)}>{t("Izbornik") + " "}<span aria-hidden="true">☰</span></button>
+          <button className="top-action menu-button" type="button" aria-expanded={showSiteMenu} aria-controls="hzpp-site-menu" onClick={() => { setShowSiteMenu(open => !open); setShowTrainSearch(false); setTrainNumber(''); }}>{t("Izbornik") + " "}<span aria-hidden="true">☰</span></button>
           {showSiteMenu && <nav id="hzpp-site-menu" className="site-menu" aria-label={t("Informacije o Transitlyju")}>
             <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)}>{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
             <a href="/privacy">{t("Privatnost")}</a><a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Kolačići")}</a><a href={`mailto:${email}`}>{t("Kontakt i prijava greške")}</a>
@@ -218,12 +226,20 @@ export default function TransitlyHzpp() {
       </div>
       <div className="network-status"><span className="status-dot" />{" " + t("HŽPP podaci") + " "}<span className="status-divider">·</span>{" " + t("Zagreb i Hrvatska")}</div>
       <div className="top-actions">
+        <button type="button" className="top-action" aria-label={t("Pretraži vlakove po broju")} aria-expanded={showTrainSearch} aria-controls="train-search"
+          onClick={() => { setShowTrainSearch(!showTrainSearch); setShowSiteMenu(false); setTrainNumber(''); }}><Search size={17} aria-hidden="true" /></button>
         {user ? <><span className="user-email">{user.email}</span><button className="top-action account-button" onClick={() => void logout().catch(() => setMessage(t("Odjava trenutačno nije uspjela.")))} aria-label={t("Odjavi se")}><span>{t("Odjava")}</span><Icon name="logout" size={15} /></button></> : authStatus.loginEnabled && <button className="top-action account-button" onClick={() => setShowAuth(true)}><span>{t("Prijava")}</span><Icon name="login" size={15} /></button>}
         <button className="top-action refresh-button" onClick={() => search && void loadJourneys(search)} aria-label={t("Osvježi polaske")}><span>{t("Osvježi")}</span><Icon name="wifi" size={16} /></button>
       </div>
     </header>
 
     <div className="workspace">
+      {showTrainSearch && <label id="train-search" className="train-search">
+        <Search size={17} aria-hidden="true" />
+        <input type="search" autoFocus maxLength={24} value={trainNumber} aria-label={t("Broj vlaka u rezultatima")}
+          placeholder={t("Broj vlaka u rezultatima")} onChange={event => setTrainNumber(event.target.value)}
+          onKeyDown={event => { if (event.key === 'Escape') { setShowTrainSearch(false); setTrainNumber(''); } }} />
+      </label>}
       <aside className="side-panel">
         <div className="panel-heading"><div><span className="eyebrow">{t("PLANER PUTOVANJA VLAKOM")}</span><h1>{t("Gdje i kada putuješ?")}</h1></div><div className="round-icon"><Icon name="train" size={19} /></div></div>
         <form onSubmit={submitSearch}>
@@ -244,13 +260,14 @@ export default function TransitlyHzpp() {
         </form>
         {nearby && <div className="nearest-note"><Icon name="pin" size={14} />{" " + t("Najbliža stanica:") + " "}<strong>{nearby.name}</strong></div>}
 
-        <div className="departures-head"><div><span className="eyebrow">{t("POLASCI ZA ODABRANI DAN")}</span><h2>{search?.from.name ?? t("Odaberi relaciju")}</h2></div><span className="count-pill">{journeys.length}</span></div>
+        <div className="departures-head"><div><span className="eyebrow">{t("POLASCI ZA ODABRANI DAN")}</span><h2>{search?.from.name ?? t("Odaberi relaciju")}</h2></div><span className="count-pill">{shownJourneys.length}</span></div>
         <div className="route-summary"><span>{search?.from.name || t("Polazak")}</span><i /><span>{search?.to.name || t("Dolazak")}</span><span>{search ? t("{0} · nakon {1}", displayDate(search.date), search.time) : ''}</span></div>
         <div className="departure-list" aria-live="polite">
           {loadingJourneys && <TransitLoadingAnimation mode="train" label={t("Vlak vozi dok tražimo polaske…")} compact />}
           {!loadingJourneys && !journeys.length && !message && <div className="empty-state">{t("Odaberi polaznu stanicu, odredište i datum pa potraži vlakove.")}</div>}
           {message && !journeys.length && <div className="empty-state error-state">{message}</div>}
-          {journeys.map((journey, index) => {
+          {trainQuery && journeys.length > 0 && shownJourneys.length === 0 && <div className="empty-state">{t("U rezultatima nema vlaka s tim brojem.")}</div>}
+          {shownJourneys.map((journey, index) => {
             const legs = journey.TransportationsWithDelay?.TransportationWithDelay ?? [];
             const departureDelay = delayMinutes(legs[0]);
             const arrivalDelay = delayMinutes(legs[legs.length - 1]);
@@ -266,7 +283,7 @@ export default function TransitlyHzpp() {
               : `${duration} min`;
             const journeyKey = `${legs.map(leg => leg.Number).join('-')}-${journey.DepartureDateTime}`;
             const isExpanded = expandedJourney === journeyKey;
-            return <article className={`departure-card ${index === 0 ? 'next-card' : ''}`} key={journeyKey}>
+            return <article className={`departure-card ${index === 0 && journey === journeys[0] ? 'next-card' : ''}`} key={journeyKey}>
               <div className="departure-times">
                 <span><small>{departureDelay ? t("Procijenjeni polazak") : t("Polazak")}</small><strong>{time(departureAt)}</strong></span>
                 <span className="duration-line" aria-hidden="true" />
@@ -276,7 +293,10 @@ export default function TransitlyHzpp() {
               {Number.isFinite(duration) && duration >= 0 && <p className="scheduled-arrival-note">{t("Trajanje vožnje:") + " "}{durationLabel}</p>}
               <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} />{" " + t("Vlak") + " "}{legs.map(leg => leg.Number).filter(Boolean).join(' → ') || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? t("Kasni {0} min", delay) : t("Po rasporedu")}</span></div>
               {legs.length > 1 && <div className="transfer-legs">{legs.map((leg, legIndex) => <span key={`${leg.Number}-${legIndex}`}>{leg.Start?.Name} → {leg.Dest?.Name}</span>)}</div>}
-              <div className="card-footer"><span><Icon name="clock" size={13} /> {wait === 0 ? t("Uskoro polazi") : t("Za {0} min", wait)}</span>{live && delayedLeg?.Delay?.Station && <span>{t("Zadnja prijava:") + " "}{delayedLeg.Delay.Station}</span>}</div>
+              {(isToday || (live && delayedLeg?.Delay?.Station)) && <div className="card-footer">
+                {isToday && <span><Icon name="clock" size={13} /> {wait === 0 ? t("Uskoro polazi") : t("Za {0} min", wait)}</span>}
+                {live && delayedLeg?.Delay?.Station && <span>{t("Zadnja prijava:") + " "}{delayedLeg.Delay.Station}</span>}
+              </div>}
               <button className="details-toggle" type="button" aria-expanded={isExpanded} onClick={() => void toggleJourney(journeyKey, legs)}>{isExpanded ? t("Sakrij stanice") : t("Prikaži stanice i vremena")}</button>
               {isExpanded && <div className="stop-details" aria-live="polite">
                 {legs.map((leg, legIndex) => {
@@ -296,7 +316,7 @@ export default function TransitlyHzpp() {
         <div className="panel-footnote">{t("Polasci i kašnjenja preuzeti su iz HŽPP-ovih podataka. HŽPP ne šalje GPS lokaciju vlaka; stanica uz kašnjenje označava zadnju prijavu, ne položaj uživo.") + " "}<a href="/about/">{t("O Transitlyju")}</a> · <a href="/terms">{t("Uvjeti korištenja")}</a></div>
       </aside>
 
-      <section className="data-note" aria-live="polite"><span className="status-dot" />{search ? search.date === zagrebDate() ? <>{" " + t("Današnji polasci osvježavaju se svakih 30 sekundi") + " "}<span>·</span> {time(now)}</> : " " + t("Raspored za odabrani datum") : " " + t("Unesi relaciju i datum za prikaz polazaka")}</section>
+      <section className="data-note" aria-live="polite"><span className="status-dot" />{search ? isToday ? <>{" " + t("Današnji polasci osvježavaju se svakih 30 sekundi") + " "}<span>·</span> {time(now)}</> : " " + t("Raspored za odabrani datum") : " " + t("Unesi relaciju i datum za prikaz polazaka")}</section>
     </div>
     {showAuth && <AuthModal onClose={() => setShowAuth(false)} loginEnabled={authStatus.loginEnabled} registrationEnabled={authStatus.registrationEnabled} />}
     <CookieNotice />

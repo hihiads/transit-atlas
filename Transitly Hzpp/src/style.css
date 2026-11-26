@@ -25,3 +25,8 @@ html[data-theme='dark'] body,html[data-theme='dark'] .app-shell{background:#0b11
 }
 .departure-times .duration-line { align-self: end; margin-bottom: .85rem; }
 html[data-theme='dark'] .leg-stops h3 { color: #a7bac8; }
+
+.train-search{display:flex;align-items:center;gap:8px;padding:0 12px;border:1px solid #aebfcb;border-radius:12px;background:#fff;color:#405a6d}
+.train-search input{min-width:0;width:100%;height:44px;border:0;background:transparent;color:inherit;font-size:16px}
+:root[data-theme="dark"] .train-search{background:#14283a;color:#e8f2f7}
+@media(max-width:420px){.field-copy input{text-overflow:ellipsis}.topbar{height:52px;gap:5px}.top-action{min-width:36px;justify-content:center}.refresh-button span{display:none}}

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import MapView from './components/MapView';
 import Header from './components/Header';
 import FilterPanel from './components/FilterPanel';
+import VehicleSearch from './components/VehicleSearch';
 import VehicleCard from './components/VehicleCard';
 import VehicleProfileModal from './components/VehicleProfileModal';
 import SchedulePanel from './components/SchedulePanel';
@@ -29,6 +30,7 @@ function App() {
   const [profileVehicle, setProfileVehicle] = useState<Vehicle | null>(null);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [showVehicleSearch, setShowVehicleSearch] = useState(false);
   const [showMapMenu, setShowMapMenu] = useState(false);
   const [darkMode, setDarkMode] = useState(() => readTheme() === 'dark');
   const [loading, setLoading] = useState(true);
@@ -318,7 +320,19 @@ function App() {
         loginEnabled={authStatus.loginEnabled}
         registrationEnabled={authStatus.registrationEnabled}
         menuOpen={showMapMenu}
-        onMenuToggle={() => setShowMapMenu(!showMapMenu)}
+        onMenuToggle={() => { setShowMapMenu(!showMapMenu); setShowVehicleSearch(false); }}
+        searchOpen={showVehicleSearch}
+        onSearchToggle={() => { setShowVehicleSearch(!showVehicleSearch); setShowMapMenu(false); }}
+        searchContent={<VehicleSearch vehicles={vehicles} onClose={() => setShowVehicleSearch(false)} onSelect={vehicle => {
+          setShowVehicleSearch(false);
+          setSelectedType('all');
+          setSelectedLine('');
+          setSelectedStop(null);
+          setProfileVehicle(null);
+          setMapCenter([vehicle.lat, vehicle.lon]);
+          setMapZoom(16);
+          setSelectedVehicle(vehicle);
+        }} />}
         menuContent={<>
           <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)} className="mb-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
           <div className="grid grid-cols-1 gap-2">
@@ -356,7 +370,9 @@ function App() {
       </div>
       {selectedVehicle && (
         <VehicleCard
-          vehicle={selectedVehicle}
+          key={`${selectedVehicle.id}:${selectedVehicle.tripId ?? ''}`}
+          vehicle={vehicles.find(vehicle => vehicle.id === selectedVehicle.id && vehicle.tripId === selectedVehicle.tripId) ?? selectedVehicle}
+          onRequireLogin={authStatus.loginEnabled ? () => setShowAuthModal(true) : undefined}
           onClose={() => setSelectedVehicle(null)}
           onViewProfile={() => {
             setProfileVehicle(selectedVehicle);

@@ -75,6 +75,14 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data;
 }
 
+export async function reportVehicle(vehicleId: string, tripId: string, reason: 'breakdown' | 'delay'): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE}/api/auth/vehicle-reports`, {
+    method: 'POST', headers: jsonHeaders, credentials: 'include',
+    body: JSON.stringify({ vehicleId, tripId, reason })
+  });
+  return handleResponse<AuthResponse>(response);
+}
+
 export async function register(email: string, password: string, turnstileToken: string, consent: RegistrationConsent): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',

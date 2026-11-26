@@ -6,6 +6,7 @@ export interface Vehicle {
   lat: number;
   lon: number;
   lastUpdate: number;
+  zetId?: string | null;
   garageNumber?: string | null;
   registrationNumber?: string | null;
   model?: string;

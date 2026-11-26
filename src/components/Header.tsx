@@ -1,3 +1,4 @@
+import { Search } from 'lucide-react';
 import { t } from '../services/i18n';
 import { useAuth } from '../contexts/AuthContext';
 import { useState } from 'react';
@@ -13,6 +14,9 @@ interface HeaderProps {
   menuOpen: boolean;
   onMenuToggle: () => void;
   menuContent: ReactNode;
+  searchOpen: boolean;
+  onSearchToggle: () => void;
+  searchContent: ReactNode;
 }
 
 export default function Header({
@@ -24,7 +28,10 @@ export default function Header({
   registrationEnabled,
   menuOpen,
   onMenuToggle,
-  menuContent
+  menuContent,
+  searchOpen,
+  onSearchToggle,
+  searchContent
 }: HeaderProps) {
   const { user, logout, deleteAccount } = useAuth();
   const [showDelete, setShowDelete] = useState(false);
@@ -56,7 +63,6 @@ export default function Header({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="truncate text-base font-bold tracking-tight sm:text-xl">Transitly</h1>
               <label className="sr-only" htmlFor="transit-provider">{t("Odaberi prijevoznika")}</label>
               <select id="transit-provider" aria-label={t("Odaberi prijevoznika")} defaultValue="zet" onChange={event => { if (event.target.value === 'hzpp') window.location.assign('/hzpp/'); }} className="min-h-8 max-w-[5.5rem] rounded-lg border border-white/20 bg-[#19364a] px-2 text-xs font-bold text-white outline-none hover:bg-[#25475d] focus-visible:ring-2 focus-visible:ring-[#a9f0d1]">
                 <option className="text-slate-900" value="zet">ZET</option>
@@ -66,17 +72,20 @@ export default function Header({
                 <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />{status.label}
               </span>
             </div>
-            <p className="hidden text-xs text-slate-300 md:block">{t("Linije i polasci javnog prijevoza")}</p>
           </div>
           <div className="shrink-0 sm:relative">
-            <button type="button" aria-expanded={menuOpen} aria-controls="site-menu" onClick={onMenuToggle} className="flex min-h-10 items-center gap-1.5 rounded-xl border border-white/15 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-white/10 sm:gap-2 sm:px-3 sm:text-sm">
-              <span aria-hidden="true" className="text-base leading-none">☰</span><span>{t("Izbornik")}</span>
+            <button type="button" aria-label={t("Izbornik")} aria-expanded={menuOpen} aria-controls="site-menu" onClick={onMenuToggle} className="flex min-h-10 items-center gap-1.5 rounded-xl border border-white/15 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-white/10 sm:gap-2 sm:px-3 sm:text-sm">
+              <span aria-hidden="true" className="text-base leading-none">☰</span><span className="hidden min-[380px]:inline">{t("Izbornik")}</span>
             </button>
             {menuOpen && <div id="site-menu" className="absolute left-3 right-3 top-full z-[1200] mt-1 max-h-[min(75dvh,38rem)] overflow-y-auto rounded-2xl border border-white/70 bg-[#f3f7f6]/95 p-3 text-slate-800 shadow-2xl backdrop-blur sm:left-0 sm:right-auto sm:mt-2 sm:w-[21rem] sm:p-4">
               {menuContent}
               {user && <button type="button" onClick={() => { onMenuToggle(); openDeleteDialog(); }} className="mt-2 min-h-10 rounded-lg px-2 text-sm font-semibold text-red-800 underline underline-offset-2 hover:bg-white sm:hidden">{t("Obriši račun")}</button>}
             </div>}
           </div>
+          <button type="button" aria-label={t("Pretraži vozila")} aria-expanded={searchOpen} aria-controls="vehicle-search" onClick={onSearchToggle}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 hover:bg-white/10 aria-expanded:bg-white/15">
+            <Search size={18} aria-hidden="true" />
+          </button>
         </div>
 
         <div className="col-start-1 row-start-2 flex items-center gap-1.5 sm:hidden">
@@ -100,6 +109,7 @@ export default function Header({
           ) : null}
         </div>
       </div>
+      {searchOpen && searchContent}
       {showDelete && <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" role="presentation">
         <section role="dialog" aria-modal="true" aria-labelledby="delete-account-title" aria-describedby="delete-account-description" onKeyDown={event => {
           if (event.key === 'Escape' && !deleting) setShowDelete(false);

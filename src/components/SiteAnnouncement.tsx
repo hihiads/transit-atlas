@@ -20,8 +20,18 @@ export function AnnouncementBanner({ text, level, onDismiss }: Pick<Announcement
   );
 }
 
+interface VehicleNotice {
+  id: string;
+  type: 'bus' | 'tram';
+  line: string;
+  reason: 'breakdown' | 'delay';
+  count: number;
+  expiresAt: string;
+}
+
 export default function SiteAnnouncement() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [vehicleNotices, setVehicleNotices] = useState<VehicleNotice[]>([]);
   const [dismissedAt, setDismissedAt] = useState('');
 
   useEffect(() => {
@@ -31,11 +41,15 @@ export default function SiteAnnouncement() {
       const controller = new AbortController();
       pending = controller;
       setAnnouncement(current => current?.expiresAt && Date.parse(current.expiresAt) <= Date.now() ? null : current);
+      setVehicleNotices(current => current.filter(notice => Date.parse(notice.expiresAt) > Date.now()));
       try {
         const response = await fetch(API_ROOT + '/announcement', { signal: controller.signal });
         if (!response.ok) return;
-        const { announcement } = await response.json();
-        if (!controller.signal.aborted) setAnnouncement(announcement);
+        const { announcement, vehicleNotices } = await response.json();
+        if (!controller.signal.aborted) {
+          setAnnouncement(announcement);
+          setVehicleNotices(vehicleNotices ?? []);
+        }
       } catch {
         // Keep the last active announcement if the connection temporarily drops.
       }
@@ -45,6 +59,17 @@ export default function SiteAnnouncement() {
     return () => { pending?.abort(); window.clearInterval(timer); };
   }, []);
 
-  if (!announcement || announcement.updatedAt === dismissedAt) return null;
-  return <AnnouncementBanner {...announcement} onDismiss={() => setDismissedAt(announcement.updatedAt)} />;
+  return <>
+    {announcement && announcement.updatedAt !== dismissedAt && <AnnouncementBanner {...announcement} onDismiss={() => setDismissedAt(announcement.updatedAt)} />}
+    {vehicleNotices.length > 0 && <section aria-label={t("Dojave putnika")} className="max-h-[22dvh] shrink-0 overflow-y-auto border-b border-amber-300 bg-amber-100 px-3 py-2 text-sm text-amber-950">
+      <h2 className="text-xs font-bold">{t("Dojave putnika")}</h2>
+      <ul className="divide-y divide-amber-200">
+        {vehicleNotices.map(({ id, line, type, count, reason }) => <li key={id} className="py-1">
+          {reason === 'breakdown'
+            ? t("{0} korisnika prijavilo je kvar na liniji {1} · {2}.", count, line, type === 'bus' ? t("Autobus") : t("Tramvaj"))
+            : t("{0} korisnika prijavilo je kašnjenje na liniji {1} · {2}.", count, line, type === 'bus' ? t("Autobus") : t("Tramvaj"))}
+        </li>)}
+      </ul>
+    </section>}
+  </>;
 }
