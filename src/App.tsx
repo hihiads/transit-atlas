@@ -20,6 +20,7 @@ import { getDevicePosition } from './services/deviceLocation';
 import { isNativeApp } from './services/platform';
 import { alertsAllowed, showAlert } from './services/alerts';
 import InstallAppButton from './components/InstallAppButton';
+import InstallAppPrompt from './components/InstallAppPrompt';
 import TransitLoadingAnimation from './components/TransitLoadingAnimation';
 
 function App() {
@@ -443,6 +444,7 @@ function App() {
         <AuthModal onClose={() => setShowAuthModal(false)} loginEnabled={authStatus.loginEnabled} registrationEnabled={authStatus.registrationEnabled} />
       )}
       <CookieNotice />
+      <InstallAppPrompt />
     </div>
   );
 }

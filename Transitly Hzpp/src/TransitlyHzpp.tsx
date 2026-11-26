@@ -12,6 +12,7 @@ import { API_ORIGIN } from '../../src/services/platform';
 import { getDevicePosition } from '../../src/services/deviceLocation';
 import { alertsAllowed, requestAlertPermission, showAlert } from '../../src/services/alerts';
 import InstallAppButton from '../../src/components/InstallAppButton';
+import InstallAppPrompt from '../../src/components/InstallAppPrompt';
 import TransitLoadingAnimation from '../../src/components/TransitLoadingAnimation';
 
 function Icon({ name, size = 16 }: { name: 'swap' | 'clock' | 'locate' | 'login' | 'logout' | 'pin' | 'train' | 'wifi'; size?: number }) {
@@ -430,6 +431,7 @@ export default function TransitlyHzpp() {
       <section className="data-note" aria-live="polite"><span className="status-dot" />{search ? isToday ? <>{" " + t("Današnji polasci osvježavaju se svakih 30 sekundi") + " "}<span>·</span> {time(now)}</> : " " + t("Raspored za odabrani datum") : " " + t("Unesi relaciju i datum za prikaz polazaka")}</section>
     </div>
     {showAuth && <AuthModal onClose={() => setShowAuth(false)} loginEnabled={authStatus.loginEnabled} registrationEnabled={authStatus.registrationEnabled} />}
+    <InstallAppPrompt />
     <CookieNotice />
   </main>;
 }
