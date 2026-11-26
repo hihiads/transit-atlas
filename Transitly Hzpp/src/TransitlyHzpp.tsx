@@ -296,7 +296,14 @@ export default function TransitlyHzpp() {
               {departureDelay > 0 && <p className="scheduled-arrival-note">{t("Vlak je trebao doći u") + " "}{time(journey.DepartureDateTime)}</p>}
               {Number.isFinite(duration) && duration >= 0 && <p className="scheduled-arrival-note">{t("Trajanje vožnje:") + " "}{durationLabel}</p>}
               <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} />{" " + t("Vlak") + " "}{legs.map(leg => leg.Number).filter(Boolean).join(' → ') || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? t("Kasni {0} min", delay) : t("Po rasporedu")}</span></div>
-              {legs.length > 0 && <div className="route-legs" aria-label={t("Relacija vlaka")}>{legs.map((leg, legIndex) => <span key={`${leg.Number}-${legIndex}`}><strong>{t("Vlak") + " "}{leg.Number}</strong>{leg.DepartureDateTime ? " · " + time(leg.DepartureDateTime) : ""}<br />{leg.Start?.Name || '—'} → {leg.Dest?.Name || '—'}</span>)}</div>}
+              {legs.length > 0 && <div className="route-legs" aria-label={t("Relacija vlaka")}>{legs.map((leg, legIndex) => {
+                const line = journeyDetails[`${journeyKey}:${legIndex}`]?.route;
+                return <span key={`${leg.Number}-${legIndex}`}>
+                  <strong>{t("Vlak") + " "}{leg.Number}{leg.DepartureDateTime ? " · " + time(leg.DepartureDateTime) : ""}</strong>
+                  <b>{leg.Start?.Name || '—'} → {leg.Dest?.Name || '—'}</b>
+                  {line && <small>{t("Linija {0} – {1}", line.from, line.to)}</small>}
+                </span>;
+              })}</div>}
               {(isToday || (live && delayedLeg?.Delay?.Station)) && <div className="card-footer">
                 {isToday && <span><Icon name="clock" size={13} /> {wait === 0 ? t("Uskoro polazi") : t("Za {0} min", wait)}</span>}
                 {live && delayedLeg?.Delay?.Station && <span>{t("Zadnja prijava:") + " "}{delayedLeg.Delay.Station}</span>}
@@ -306,7 +313,7 @@ export default function TransitlyHzpp() {
                 {legs.map((leg, legIndex) => {
                   const detail = journeyDetails[`${journeyKey}:${legIndex}`];
                   return <section className="leg-stops" key={`${leg.Number}-${legIndex}`}>
-                    <h3>{t("Vlak") + " "}{leg.Number}{detail?.route && " " + t("· Linija {0} – {1}", detail.route.from, detail.route.to)}</h3>
+                    <h3>{t("Vlak") + " "}{leg.Number}</h3>
                     {detail?.loading && <TransitLoadingAnimation mode="train" label={t("Učitavam stanice vlaka…")} compact />}
                     {detail?.error && <p role="status">{detail.error}</p>}
                     {detail?.stops?.map((stop, stopIndex) => <div className="stop-row" key={`${stop.name}-${stopIndex}`}><span className="stop-dot" /><strong>{stop.name}</strong><span>{stopIndex === 0 ? t("Polazak") : t("Dolazak")} <b>{stopIndex === 0 ? stop.departure || stop.arrival || '—' : stop.arrival || stop.departure || '—'}</b></span>{stopIndex > 0 && stopIndex < detail.stops!.length - 1 && stop.departure && stop.departure !== stop.arrival && <span>{t("Polazak") + " "}<b>{stop.departure}</b></span>}</div>)}
