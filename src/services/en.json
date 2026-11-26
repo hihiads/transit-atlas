@@ -283,6 +283,8 @@
   "Kašnjenje prikazujemo samo kada ga HŽPP-ov odgovor sadrži. Stanica navedena uz kašnjenje znači zadnju prijavljenu stanicu iz tog podatka; to nije GPS lokacija ni dokaz trenutačnog položaja vlaka. HŽPP ne šalje Transitlyju GPS položaj vlaka u ovom prikazu. Oznaka „Po rasporedu” znači da odgovor nije sadržavao pozitivno kašnjenje; ne potvrđuje neovisnom provjerom da je vlak u tom trenutku na vrijeme.": "We show delays when HŽPP reports them. The station shown with a delay is the last station named in that report. It does not indicate a GPS position or confirm the train's current location. HŽPP provides no GPS positions to Transitly in this view. “Scheduled” means the response contained no positive delay. It provides no independent confirmation that the train is running on time.",
   "Kod:": "Code:",
   "Kolačići": "Cookies",
+  "Politika kolačića": "Cookie Policy",
+  "Relacija vlaka": "Train route",
   "Kolačići i lokalna pohrana": "Cookies and local storage",
   "Kontakt": "Contact",
   "Kontakt i prijava greške": "Contact and report a problem",

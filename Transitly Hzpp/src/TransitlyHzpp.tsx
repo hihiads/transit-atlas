@@ -224,10 +224,7 @@ export default function TransitlyHzpp() {
             <LanguageSelect />
             <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)}>{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
             <a href="/status?area=hzpp">{t("Stanje usluga")}</a><a href="/feedback?area=hzpp">{t("Prijavi grešku")}</a>
-            <details>
-              <summary>{t("O aplikaciji i pravne informacije")}</summary>
-              <a href="/privacy">{t("Privatnost")}</a><a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Kolačići")}</a><a href={`mailto:${email}`}>{t("Kontakt")}</a>
-            </details>
+            <a href="/privacy">{t("Politika privatnosti")}</a><a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Politika kolačića")}</a><a href={`mailto:${email}`}>{t("Kontakt")}</a>
           </nav>}
         </div>
       </div>
@@ -299,7 +296,7 @@ export default function TransitlyHzpp() {
               {departureDelay > 0 && <p className="scheduled-arrival-note">{t("Vlak je trebao doći u") + " "}{time(journey.DepartureDateTime)}</p>}
               {Number.isFinite(duration) && duration >= 0 && <p className="scheduled-arrival-note">{t("Trajanje vožnje:") + " "}{durationLabel}</p>}
               <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} />{" " + t("Vlak") + " "}{legs.map(leg => leg.Number).filter(Boolean).join(' → ') || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? t("Kasni {0} min", delay) : t("Po rasporedu")}</span></div>
-              {legs.length > 1 && <div className="transfer-legs">{legs.map((leg, legIndex) => <span key={`${leg.Number}-${legIndex}`}>{leg.Start?.Name} → {leg.Dest?.Name}</span>)}</div>}
+              {legs.length > 0 && <div className="route-legs" aria-label={t("Relacija vlaka")}>{legs.map((leg, legIndex) => <span key={`${leg.Number}-${legIndex}`}><strong>{t("Vlak") + " "}{leg.Number}</strong>{leg.DepartureDateTime ? " · " + time(leg.DepartureDateTime) : ""}<br />{leg.Start?.Name || '—'} → {leg.Dest?.Name || '—'}</span>)}</div>}
               {(isToday || (live && delayedLeg?.Delay?.Station)) && <div className="card-footer">
                 {isToday && <span><Icon name="clock" size={13} /> {wait === 0 ? t("Uskoro polazi") : t("Za {0} min", wait)}</span>}
                 {live && delayedLeg?.Delay?.Station && <span>{t("Zadnja prijava:") + " "}{delayedLeg.Delay.Station}</span>}

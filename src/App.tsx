@@ -360,14 +360,13 @@ function App() {
             <a className="rounded-lg px-2 py-2 hover:bg-white" href="/status">{t("Stanje usluga")}</a>
             <a className="rounded-lg px-2 py-2 hover:bg-white" href="/feedback">{t("Prijavi grešku")}</a>
           </nav>
-          <details className="mt-2 text-xs text-slate-600">
-            <summary className="cursor-pointer rounded-lg px-2 py-2">{t("O aplikaciji i pravne informacije")}</summary>
-            <div className="grid grid-cols-2 gap-2 px-2 pb-2">
-              <a href="/about/">{t("O Transitlyju")}</a><a href="/privacy">{t("Privatnost")}</a>
-              <a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Kolačići")}</a>
-              <a href="mailto:info@transitly.eu">{t("Kontakt")}</a>
-            </div>
-          </details>
+          <nav aria-label={t("Pravne informacije")} className="mt-2 grid grid-cols-2 gap-2 px-2 text-xs text-slate-600">
+            <a href="/privacy">{t("Politika privatnosti")}</a>
+            <a href="/terms">{t("Uvjeti korištenja")}</a>
+            <a href="/cookies">{t("Politika kolačića")}</a>
+            <a href="/about/">{t("O Transitlyju")}</a>
+            <a href="mailto:info@transitly.eu">{t("Kontakt")}</a>
+          </nav>
         </>}
       />
 
