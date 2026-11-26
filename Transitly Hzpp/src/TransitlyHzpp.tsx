@@ -73,6 +73,23 @@ function effectiveDeparture(journey: Journey) {
   return Date.parse(journey.DepartureDateTime) + delayMinutes(journey.TransportationsWithDelay?.TransportationWithDelay?.[0]) * 60000;
 }
 
+function journeyKeyOf(journey: Journey) {
+  const legs = journey.TransportationsWithDelay?.TransportationWithDelay ?? [];
+  return `${legs.map(leg => leg.Number).join('-')}-${journey.DepartureDateTime}`;
+}
+
+// Tracked trains are kept in this browser only; notifications are shown while the page is open.
+type TrackedTrain = { key: string; numbers: string; destination: string; scheduledArrival: string; lastNotifiedDelay: number };
+const trackedTrainsKey = 'transit-hzpp-tracked';
+
+function readTrackedTrains(): TrackedTrain[] {
+  try { return JSON.parse(localStorage.getItem(trackedTrainsKey) || '[]'); } catch { return []; }
+}
+
+function writeTrackedTrains(items: TrackedTrain[]) {
+  localStorage.setItem(trackedTrainsKey, JSON.stringify(items));
+}
+
 export default function TransitlyHzpp() {
   const { user, logout } = useAuth();
   const [stations, setStations] = useState<Station[]>([]);
@@ -98,8 +115,66 @@ export default function TransitlyHzpp() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ loginEnabled: true, registrationEnabled: true, authenticationActive: true });
   const requestId = useRef(0);
 
+  const [trackedTrains, setTrackedTrains] = useState<TrackedTrain[]>(readTrackedTrains);
+
   useEffect(() => { api.getAuthStatus().then(setAuthStatus).catch(() => {}); }, []);
   useEffect(() => { applyTheme(darkMode ? 'dark' : 'light'); }, [darkMode]);
+
+  // Runs on every journey refresh (every 30 s for today): notify on any delay of 1 minute or more, once per new delay value.
+  useEffect(() => {
+    if (!trackedTrains.length) return;
+    const fresh = trackedTrains.filter(entry => Date.parse(entry.scheduledArrival) > Date.now() - 2 * 3600_000);
+    let changed = fresh.length !== trackedTrains.length;
+    const next = fresh.map(entry => {
+      const journey = journeys.find(item => journeyKeyOf(item) === entry.key);
+      if (!journey || typeof Notification === 'undefined' || Notification.permission !== 'granted') return entry;
+      const legs = journey.TransportationsWithDelay?.TransportationWithDelay ?? [];
+      const delay = Math.max(0, ...legs.map(delayMinutes));
+      if (delay < 1 || delay === entry.lastNotifiedDelay) return entry;
+      const estimatedArrival = Date.parse(journey.ArrivalDateTime) + delayMinutes(legs[legs.length - 1]) * 60000;
+      new Notification(t("Vlak {0} kasni {1} min", entry.numbers, delay), {
+        body: t("Procijenjeni dolazak u {0}: {1} (planirano {2}).", entry.destination, time(estimatedArrival), time(entry.scheduledArrival)),
+        tag: entry.key
+      });
+      changed = true;
+      return { ...entry, lastNotifiedDelay: delay };
+    });
+    if (changed) {
+      writeTrackedTrains(next);
+      setTrackedTrains(next);
+    }
+  }, [journeys, trackedTrains]);
+
+  async function toggleTrackTrain(journey: Journey) {
+    const key = journeyKeyOf(journey);
+    const current = readTrackedTrains();
+    if (current.some(item => item.key === key)) {
+      const next = current.filter(item => item.key !== key);
+      writeTrackedTrains(next);
+      setTrackedTrains(next);
+      return;
+    }
+    if (typeof Notification === 'undefined') {
+      setMessage(t("Obavijesti nisu podržane u ovom pregledniku."));
+      return;
+    }
+    const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+    if (permission !== 'granted') {
+      setMessage(t("Dozvola za obavijesti nije odobrena."));
+      return;
+    }
+    const legs = journey.TransportationsWithDelay?.TransportationWithDelay ?? [];
+    const entry: TrackedTrain = {
+      key,
+      numbers: legs.map(leg => leg.Number).filter(Boolean).join(' → '),
+      destination: legs[legs.length - 1]?.Dest?.Name || search?.to.name || '',
+      scheduledArrival: journey.ArrivalDateTime,
+      lastNotifiedDelay: 0
+    };
+    const next = [...current, entry];
+    writeTrackedTrains(next);
+    setTrackedTrains(next);
+  }
 
   const from = stations.find(station => normalize(station.name) === normalize(fromName)) ?? null;
   const to = stations.find(station => normalize(station.name) === normalize(toName)) ?? null;
@@ -287,6 +362,7 @@ export default function TransitlyHzpp() {
               : `${duration} min`;
             const journeyKey = `${legs.map(leg => leg.Number).join('-')}-${journey.DepartureDateTime}`;
             const isExpanded = expandedJourney === journeyKey;
+            const isTracked = trackedTrains.some(item => item.key === journeyKey);
             return <article className={`departure-card ${index === 0 && journey === journeys[0] ? 'next-card' : ''}`} key={journeyKey}>
               <div className="departure-times">
                 <span><small>{departureDelay ? t("Procijenjeni polazak") : t("Polazak")}</small><strong>{time(departureAt)}</strong></span>
@@ -309,6 +385,7 @@ export default function TransitlyHzpp() {
                 {live && delayedLeg?.Delay?.Station && <span>{t("Zadnja prijava:") + " "}{delayedLeg.Delay.Station}</span>}
               </div>}
               <button className="details-toggle" type="button" aria-expanded={isExpanded} onClick={() => void toggleJourney(journeyKey, legs)}>{isExpanded ? t("Sakrij stanice") : t("Prikaži stanice i vremena")}</button>
+              <button className="details-toggle track-toggle" type="button" aria-pressed={isTracked} onClick={() => void toggleTrackTrain(journey)}>{isTracked ? t("Prestani pratiti vlak") : t("Prati vlak")}</button>
               {isExpanded && <div className="stop-details" aria-live="polite">
                 {legs.map((leg, legIndex) => {
                   const detail = journeyDetails[`${journeyKey}:${legIndex}`];
