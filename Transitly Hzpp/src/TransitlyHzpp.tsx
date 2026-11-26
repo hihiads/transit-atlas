@@ -11,6 +11,7 @@ import { applyTheme, readTheme } from '../../src/services/theme';
 import { API_ORIGIN } from '../../src/services/platform';
 import { getDevicePosition } from '../../src/services/deviceLocation';
 import { alertsAllowed, requestAlertPermission, showAlert } from '../../src/services/alerts';
+import InstallAppButton from '../../src/components/InstallAppButton';
 import TransitLoadingAnimation from '../../src/components/TransitLoadingAnimation';
 
 function Icon({ name, size = 16 }: { name: 'swap' | 'clock' | 'locate' | 'login' | 'logout' | 'pin' | 'train' | 'wifi'; size?: number }) {
@@ -321,6 +322,7 @@ export default function TransitlyHzpp() {
           {showSiteMenu && <nav id="hzpp-site-menu" className="site-menu" aria-label={t("Informacije o Transitlyju")}>
             <LanguageSelect />
             <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)}>{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
+            <InstallAppButton />
             <a href="/status?area=hzpp">{t("Stanje usluga")}</a><a href="/feedback?area=hzpp">{t("Prijavi grešku")}</a>
             <a href="/privacy">{t("Politika privatnosti")}</a><a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Politika kolačića")}</a><a href={`mailto:${email}`}>{t("Kontakt")}</a>
           </nav>}

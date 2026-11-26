@@ -19,6 +19,7 @@ import { applyTheme, readTheme } from './services/theme';
 import { getDevicePosition } from './services/deviceLocation';
 import { isNativeApp } from './services/platform';
 import { alertsAllowed, showAlert } from './services/alerts';
+import InstallAppButton from './components/InstallAppButton';
 import TransitLoadingAnimation from './components/TransitLoadingAnimation';
 
 function App() {
@@ -357,6 +358,7 @@ function App() {
           </details>
           {locationMessage && <p className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-700" role="status">{locationMessage}</p>}
           {selectedCity.status === 'unavailable' && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t("Podaci za") + " "}{selectedCity.name}{" " + t("još nisu dostupni.")}</p>}
+          <div className="mt-3 border-t border-slate-200 pt-2"><InstallAppButton /></div>
           <nav aria-label={t("Pomoć")} className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200 pt-2 text-sm font-semibold">
             <a className="rounded-lg px-2 py-2 hover:bg-white" href="/status">{t("Stanje usluga")}</a>
             <a className="rounded-lg px-2 py-2 hover:bg-white" href="/feedback">{t("Prijavi grešku")}</a>

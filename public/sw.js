@@ -1,7 +1,8 @@
-// Transitly notification worker: shows departure and delay alerts and opens the app on tap.
-// It does not cache anything.
+// Transitly notification worker: shows departure and delay alerts, opens the app on tap and makes
+// the site installable. It does not cache anything: the fetch handler lets every request go to the network.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', () => {});
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
