@@ -131,7 +131,13 @@ export default function TransitlyHzpp() {
       if (!journey || typeof Notification === 'undefined' || Notification.permission !== 'granted') return entry;
       const legs = journey.TransportationsWithDelay?.TransportationWithDelay ?? [];
       const delay = Math.max(0, ...legs.map(delayMinutes));
-      if (delay < 1 || delay === entry.lastNotifiedDelay) return entry;
+      // Back on time: forget the last delay so the next delay notifies again, even if it has the same length.
+      if (delay < 1) {
+        if (!entry.lastNotifiedDelay) return entry;
+        changed = true;
+        return { ...entry, lastNotifiedDelay: 0 };
+      }
+      if (delay === entry.lastNotifiedDelay) return entry;
       const estimatedArrival = Date.parse(journey.ArrivalDateTime) + delayMinutes(legs[legs.length - 1]) * 60000;
       new Notification(t("Vlak {0} kasni {1} min", entry.numbers, delay), {
         body: t("Procijenjeni dolazak u {0}: {1} (planirano {2}).", entry.destination, time(estimatedArrival), time(entry.scheduledArrival)),
