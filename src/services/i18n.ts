@@ -1,11 +1,17 @@
 import english from './en.json';
 
-export function resolveLanguage(preferred?: string): 'hr' | 'en' {
-  return /^hr(?:-|$)/i.test(preferred ?? '') ? 'hr' : 'en';
-}
+type Language = 'hr' | 'en';
+export const languageCookie = 'transitly-language';
 
-export const language = resolveLanguage(navigator.languages?.[0] || navigator.language);
+export const language: Language = document.cookie.split(';')
+  .some(cookie => cookie.trim() === `${languageCookie}=en`) ? 'en' : 'hr';
 export const locale = language === 'hr' ? 'hr-HR' : 'en-GB';
+
+export function selectLanguage(next: Language) {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${languageCookie}=${next}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+  window.location.reload();
+}
 
 const translations: Record<string, string> = english;
 

@@ -1,4 +1,9 @@
 {
+  "Jezik": "Language",
+  "Postavka jezika": "Language preference",
+  "Kad odaberete hrvatski ili engleski u izborniku, kolačić": "When you choose Croatian or English in the menu, the",
+  "pamti odabir do godinu dana na ovom pregledniku. Sadrži samo oznaku jezika i služi za prikaz stranice na odabranom jeziku. Možete ga obrisati u postavkama preglednika.": "cookie remembers your choice in this browser for up to one year. It contains only the language code and is used to display the site in the language you selected. You can delete it in your browser settings.",
+  "Zadnje ažurirano: 26. studenoga 2026.": "Last updated on 26 November 2026.",
   "Pretraži vozila": "Find vehicles",
   "Broj linije ili ZET ID": "Route number or ZET ID",
   "Nema vozila s tim brojem.": "No vehicles match that number.",

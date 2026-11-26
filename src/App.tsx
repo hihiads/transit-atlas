@@ -2,6 +2,7 @@ import { t } from './services/i18n';
 import { useState, useEffect } from 'react';
 import MapView from './components/MapView';
 import Header from './components/Header';
+import LanguageSelect from './components/LanguageSelect';
 import FilterPanel from './components/FilterPanel';
 import VehicleSearch from './components/VehicleSearch';
 import VehicleCard from './components/VehicleCard';
@@ -334,6 +335,7 @@ function App() {
           setSelectedVehicle(vehicle);
         }} />}
         menuContent={<>
+          <LanguageSelect />
           <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)} className="mb-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
           <div className="grid grid-cols-1 gap-2">
             <button onClick={() => { findMyLocation(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? t("Tražim lokaciju…") : t("Moja lokacija")}</button>

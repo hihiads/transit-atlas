@@ -3,6 +3,7 @@ import { locale, t } from '../../src/services/i18n';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import AuthModal from '../../src/components/Auth/AuthModal';
 import CookieNotice from '../../src/components/CookieNotice';
+import LanguageSelect from '../../src/components/LanguageSelect';
 import { api, AuthStatus } from '../../src/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { applyTheme, readTheme } from '../../src/services/theme';
@@ -218,6 +219,7 @@ export default function TransitlyHzpp() {
         <div className="site-menu-wrap">
           <button className="top-action menu-button" type="button" aria-expanded={showSiteMenu} aria-controls="hzpp-site-menu" onClick={() => { setShowSiteMenu(open => !open); setShowTrainSearch(false); setTrainNumber(''); }}>{t("Izbornik") + " "}<span aria-hidden="true">☰</span></button>
           {showSiteMenu && <nav id="hzpp-site-menu" className="site-menu" aria-label={t("Informacije o Transitlyju")}>
+            <LanguageSelect />
             <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)}>{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
             <a href="/privacy">{t("Privatnost")}</a><a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Kolačići")}</a><a href={`mailto:${email}`}>{t("Kontakt i prijava greške")}</a>
             <p>{t("Transitly vodi") + " "}<strong>Din Mulajusufović</strong></p>

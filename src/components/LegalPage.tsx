@@ -26,7 +26,7 @@ export default function LegalPage() {
       <a href="/" className="text-sm font-semibold text-blue-800 underline">{t("← Natrag na Transitly")}</a>
       <h1 className="mt-6 text-3xl font-bold">{page.title}</h1>
       <p className="mt-2 text-slate-700">{page.intro}</p>
-      <p className="mt-3 text-sm text-slate-600">{t("Zadnje ažurirano: 23. studenoga 2026.")}</p>
+      <p className="mt-3 text-sm text-slate-600">{t(window.location.pathname === '/cookies' ? "Zadnje ažurirano: 26. studenoga 2026." : "Zadnje ažurirano: 23. studenoga 2026.")}</p>
 
       {window.location.pathname === '/privacy' && <>
         <Section title={t("Voditelj obrade i kontakt")}><p>{t("Transitlyjem upravlja") + " "}{operator}{t(". Za pitanja o privatnosti, pristup, ispravak ili brisanje podataka javite se na") + " "}<a className="font-medium text-blue-800 underline" href={`mailto:${email}`}>{email}</a>{t(". U ovom trenutku na ovoj stranici nisu navedeni registrirani naziv pravne osobe, poštanska adresa ni registracijski broj.")}</p></Section>
@@ -52,6 +52,7 @@ export default function LegalPage() {
 
       {window.location.pathname === '/cookies' && <>
         <Section title={t("Što se sprema")}><p>{t("Za prijavljeni račun koristi se nužni HTTP-only kolačić sesije (naziv") + " "}<code>sessionId</code>{t(") radi prijave i zaštite računa. Administratorsko sučelje koristi zaseban nužni kolačić") + " "}<code>transit-admin</code>{t(". Postavka prikaza ove obavijesti, omiljene linije, stanice i praćeni polasci mogu se spremiti u lokalnu pohranu preglednika ili instalirane aplikacije. Ove postavke nisu kolačići za oglašavanje.")}</p></Section>
+        <Section title={t("Postavka jezika")}><p>{t("Kad odaberete hrvatski ili engleski u izborniku, kolačić")} <code>transitly-language</code> {t("pamti odabir do godinu dana na ovom pregledniku. Sadrži samo oznaku jezika i služi za prikaz stranice na odabranom jeziku. Možete ga obrisati u postavkama preglednika.")}</p></Section>
         <Section title={t("Instalirana aplikacija")}><p>{t("Mobilna aplikacija koristi nužni kolačić sesije za održavanje prijave. Omiljene linije, stanice, praćeni polasci i podsjetnici pohranjuju se lokalno na uređaju. Podsjetnici koriste operacijski sustav za prikaz obavijesti, ne oglašivačke kolačiće.")}</p></Section>
         <Section title={t("Vanjski sadržaj")}><p>{t("U web-verziji se Google Identity Services, Cloudflare Turnstile i OpenStreetMap učitavaju kada koristite Google prijavu, sigurnosnu provjeru ili kartu. Ti pružatelji mogu obraditi tehničke podatke kao što su IP adresa i podaci preglednika prema svojim pravilima privatnosti.")}</p></Section>
         <Section title={t("Upravljanje")}><p>{t("Možete izbrisati kolačiće i lokalnu pohranu kroz postavke preglednika. Brisanje kolačića sesije odjavit će vas. U pregledanom kodu aplikacije ne nalaze se oglašivački kolačići ni analitički SDK. Google, Cloudflare i drugi vanjski pružatelji mogu koristiti vlastite tehnologije prema svojim pravilima privatnosti.")}</p></Section>
