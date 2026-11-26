@@ -58,7 +58,6 @@ export const api = {
 
   async getVehicleRegistration(vehicleId: string, signal?: AbortSignal): Promise<{
     registrationNumber: string | null;
-    source: 'zet' | 'autobusi.org' | null;
   }> {
     const res = await fetch(`${API_ROOT}/vehicle/${encodeURIComponent(vehicleId)}/registration`, { signal });
     if (!res.ok) throw new Error(t("Registracija nije dostupna."));

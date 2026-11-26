@@ -5,18 +5,18 @@ import type { Vehicle } from '../types';
 
 export default function VehicleIdentifiers({ vehicle }: { vehicle: Vehicle }) {
   const { id: liveId, registrationNumber, source, type } = vehicle;
-  const [lookup, setLookup] = useState<{ id: string; plate: string | null; forum: boolean }>();
+  const [lookup, setLookup] = useState<{ id: string; plate: string | null }>();
   const canLookUp = type === 'bus' && source === 'realtime' && !registrationNumber;
 
   useEffect(() => {
     if (!canLookUp) return;
     const controller = new AbortController();
-    const update = (plate: string | null, forum: boolean) => {
-      if (!controller.signal.aborted) setLookup({ id: liveId, plate, forum });
+    const update = (plate: string | null) => {
+      if (!controller.signal.aborted) setLookup({ id: liveId, plate });
     };
     api.getVehicleRegistration(liveId, controller.signal)
-      .then(result => update(result.registrationNumber, result.source === 'autobusi.org'))
-      .catch(() => update(null, false));
+      .then(result => update(result.registrationNumber))
+      .catch(() => update(null));
     return () => controller.abort();
   }, [canLookUp, liveId]);
 
@@ -38,7 +38,6 @@ export default function VehicleIdentifiers({ vehicle }: { vehicle: Vehicle }) {
         <dd className="font-semibold" aria-live="polite">
           {plate || (canLookUp && !result ? t("Tražim registraciju…") : t("Nije dostupna"))}
         </dd>
-        {result?.forum && <dd><a href="https://autobusi.org/forum/index.php?topic=3819.0" target="_blank" rel="noreferrer" className="text-xs underline">autobusi.org</a></dd>}
       </div>}
     </dl>
   );
