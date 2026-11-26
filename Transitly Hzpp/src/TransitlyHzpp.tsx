@@ -313,7 +313,6 @@ export default function TransitlyHzpp() {
                 {legs.map((leg, legIndex) => {
                   const detail = journeyDetails[`${journeyKey}:${legIndex}`];
                   return <section className="leg-stops" key={`${leg.Number}-${legIndex}`}>
-                    <h3>{t("Vlak") + " "}{leg.Number}</h3>
                     {detail?.loading && <TransitLoadingAnimation mode="train" label={t("Učitavam stanice vlaka…")} compact />}
                     {detail?.error && <p role="status">{detail.error}</p>}
                     {detail?.stops?.map((stop, stopIndex) => <div className="stop-row" key={`${stop.name}-${stopIndex}`}><span className="stop-dot" /><strong>{stop.name}</strong><span>{stopIndex === 0 ? t("Polazak") : t("Dolazak")} <b>{stopIndex === 0 ? stop.departure || stop.arrival || '—' : stop.arrival || stop.departure || '—'}</b></span>{stopIndex > 0 && stopIndex < detail.stops!.length - 1 && stop.departure && stop.departure !== stop.arrival && <span>{t("Polazak") + " "}<b>{stop.departure}</b></span>}</div>)}
