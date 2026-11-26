@@ -114,6 +114,7 @@ export default function TransitlyHzpp() {
   const [journeyDetails, setJourneyDetails] = useState<Record<string, JourneyDetails>>({});
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ loginEnabled: true, registrationEnabled: true, authenticationActive: true });
   const requestId = useRef(0);
+  const requestedDetails = useRef(new Set<string>());
 
   const [trackedTrains, setTrackedTrains] = useState<TrackedTrain[]>(readTrackedTrains);
 
@@ -144,6 +145,19 @@ export default function TransitlyHzpp() {
       setTrackedTrains(next);
     }
   }, [journeys, trackedTrains]);
+
+  // Prefetch each upcoming train's line so the card shows it without expanding; already requested legs are skipped.
+  useEffect(() => {
+    if (!search || !journeys.length) return;
+    let active = true;
+    void (async () => {
+      for (const journey of journeys) {
+        if (!active) return;
+        await loadJourneyLegs(journeyKeyOf(journey), journey.TransportationsWithDelay?.TransportationWithDelay ?? []);
+      }
+    })();
+    return () => { active = false; };
+  }, [journeys]);
 
   async function toggleTrackTrain(journey: Journey) {
     const key = journeyKeyOf(journey);
@@ -260,14 +274,14 @@ export default function TransitlyHzpp() {
 
   function swapStations() { setFromName(toName); setToName(fromName); }
 
-  async function toggleJourney(key: string, legs: TrainLeg[]) {
-    if (expandedJourney === key) { setExpandedJourney(null); return; }
-    setExpandedJourney(key);
+  // Loads stops and the train's line (route) for each leg once; used on expand and to show the line on every card.
+  async function loadJourneyLegs(key: string, legs: TrainLeg[]) {
     const date = search?.date;
     if (!date) return;
     for (const [index, leg] of legs.entries()) {
       const detailKey = `${key}:${index}`;
-      if (journeyDetails[detailKey]?.stops || journeyDetails[detailKey]?.loading) continue;
+      if (requestedDetails.current.has(detailKey)) continue;
+      requestedDetails.current.add(detailKey);
       setJourneyDetails(current => ({ ...current, [detailKey]: { loading: true } }));
       try {
         const params = new URLSearchParams({ number: String(leg.Number || ''), start: String(leg.Start?.Name || ''), end: String(leg.Dest?.Name || ''), date, departure: time(leg.DepartureDateTime) });
@@ -280,6 +294,12 @@ export default function TransitlyHzpp() {
         setJourneyDetails(current => ({ ...current, [detailKey]: { error: error instanceof Error ? error.message : t("Ne mogu učitati stanice.") } }));
       }
     }
+  }
+
+  async function toggleJourney(key: string, legs: TrainLeg[]) {
+    if (expandedJourney === key) { setExpandedJourney(null); return; }
+    setExpandedJourney(key);
+    await loadJourneyLegs(key, legs);
   }
 
   const trainQuery = trainNumber.trim().toUpperCase();
@@ -371,13 +391,12 @@ export default function TransitlyHzpp() {
               </div>
               {departureDelay > 0 && <p className="scheduled-arrival-note">{t("Vlak je trebao doći u") + " "}{time(journey.DepartureDateTime)}</p>}
               {Number.isFinite(duration) && duration >= 0 && <p className="scheduled-arrival-note">{t("Trajanje vožnje:") + " "}{durationLabel}</p>}
-              <div className="journey-meta"><span className="train-number"><Icon name="train" size={13} />{" " + t("Vlak") + " "}{legs.map(leg => leg.Number).filter(Boolean).join(' → ') || '—'}</span><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? t("Kasni {0} min", delay) : t("Po rasporedu")}</span></div>
+              <div className="journey-meta"><span className={`trip-status ${live ? 'late' : ''}`}><i />{live ? t("Kasni {0} min", delay) : t("Po rasporedu")}</span></div>
               {legs.length > 0 && <div className="route-legs" aria-label={t("Relacija vlaka")}>{legs.map((leg, legIndex) => {
                 const line = journeyDetails[`${journeyKey}:${legIndex}`]?.route;
                 return <span key={`${leg.Number}-${legIndex}`}>
                   <strong>{t("Vlak") + " "}{leg.Number}{leg.DepartureDateTime ? " · " + time(leg.DepartureDateTime) : ""}</strong>
-                  <b>{leg.Start?.Name || '—'} → {leg.Dest?.Name || '—'}</b>
-                  {line && <small>{t("Linija {0} – {1}", line.from, line.to)}</small>}
+                  <b>{line ? `${line.from} – ${line.to}` : `${leg.Start?.Name || '—'} → ${leg.Dest?.Name || '—'}`}</b>
                 </span>;
               })}</div>}
               {(isToday || (live && delayedLeg?.Delay?.Station)) && <div className="card-footer">

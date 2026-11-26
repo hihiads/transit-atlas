@@ -26,6 +26,7 @@ html[data-theme='dark'] body,html[data-theme='dark'] .app-shell{background:#0b11
 .departure-times .duration-line { align-self: end; margin-bottom: .85rem; }
 html[data-theme='dark'] .leg-stops h3 { color: #a7bac8; }
 .route-legs > span{display:grid;gap:2px}
+.journey-meta .trip-status{margin-left:auto}
 .route-legs b{font-size:14px;font-weight:700;color:#14283a}
 .route-legs small{font-size:12px;color:#526b7e}
 html[data-theme='dark'] .route-legs{background:#1d2b38;color:#d8e4ee}
