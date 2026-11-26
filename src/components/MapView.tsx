@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker, Polyline, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { Vehicle, Stop, TransitShape } from '../types';
+import BikeShareLayer from './BikeShareLayer';
 
 // Ikone za različite tipove vozila
 const busIcon = L.divIcon({
@@ -45,6 +46,7 @@ interface MapViewProps {
   zoom: number;
   showStops: boolean;
   showShapes: boolean;
+  showBikes?: boolean;
   userLocation?: [number, number];
   onVehicleClick: (vehicle: Vehicle) => void;
   onStopClick: (stop: Stop) => void;
@@ -68,6 +70,7 @@ export default function MapView({
   zoom,
   showStops,
   showShapes,
+  showBikes = false,
   userLocation,
   onVehicleClick,
   onStopClick,
@@ -87,6 +90,7 @@ export default function MapView({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
+      <BikeShareLayer visible={showBikes} />
       {userLocation && <CircleMarker center={userLocation} radius={8} pathOptions={{ color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }}><Popup>{t("Vaša lokacija")}</Popup></CircleMarker>}
 
       {showShapes && shapes.map(shape => shape.coordinates.length > 1 && (

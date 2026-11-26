@@ -9,6 +9,7 @@ import { join } from 'path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { fetchFeed, extractFeed } from './services/gtfsArchive.js';
+import { listCroatianBikeStations } from './services/bikeShare.js';
 import { estimateNextStop, vehicleHasPassedStop } from './services/vehiclePosition.js';
 import { parse } from 'csv-parse/sync';
 import { parse as parseStream } from 'csv-parse';
@@ -720,6 +721,12 @@ function publicStatus(options) {
 }
 app.get('/api/transit-status', asyncRoute(async (req, res) => {
   res.set('Cache-Control', 'no-store').json(publicStatus(await readDashboardSettings()));
+}));
+
+// Javni bicikli (nextbike / Bajs) u svim hrvatskim gradovima.
+app.get('/api/bikes/hr', asyncRoute(async (req, res) => {
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=60');
+  res.json(await listCroatianBikeStations());
 }));
 
 // Gradovi
