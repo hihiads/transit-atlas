@@ -67,7 +67,9 @@ export default function SchedulePanel({ cityId, initialStopId, onClose, onRequir
       try {
         const response = await api.getStopDepartures(cityId, selectedStop);
         if (!cancelled) {
-          setDepartures(response.departures.filter(departure => departure.timestamp > Date.now()));
+          const upcoming = response.departures.filter(departure => departure.timestamp > Date.now());
+          setDepartures(upcoming);
+          syncTrackedDepartures(upcoming, selectedStop);
           setDepartureMessage(response.message ? t(response.message) : '');
           setDeparturesError(false);
         }
@@ -92,6 +94,33 @@ export default function SchedulePanel({ cityId, initialStopId, onClose, onRequir
       window.clearInterval(expiryTimer);
     };
   }, [selectedStop, cityId]);
+
+  // Tracked departures follow the live time: when ZET moves one by a minute or more, its key is updated and, on iPhone, its reminders are rescheduled.
+  function syncTrackedDepartures(live: Departure[], stopId: string) {
+    if (!user) return;
+    const storageKey = `transit-atlas-tracked:${user.id}`;
+    let changed = false;
+    const next = readStoredStringList(storageKey).map(key => {
+      const parts = key.split(':');
+      const [keyCity, keyStop, tripId] = parts;
+      const savedAt = Number(parts[parts.length - 1]);
+      if (keyCity !== cityId || keyStop !== stopId) return key;
+      const dep = live.find(item => item.tripId === tripId);
+      if (!dep || Math.abs(dep.timestamp - savedAt) < 60_000) return key;
+      const newKey = `${cityId}:${stopId}:${dep.tripId}:${dep.time}:${dep.timestamp}`;
+      changed = true;
+      if (isNativeApp()) {
+        void cancelDepartureReminders(key)
+          .then(() => scheduleDepartureReminders(newKey, dep.timestamp, dep.route, dep.direction))
+          .catch(() => {});
+      }
+      return newKey;
+    });
+    if (changed) {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+      setTracked(next);
+    }
+  }
 
   async function toggleTrack(dep: Departure) {
     if (!user) { onRequireLogin(); return; }
