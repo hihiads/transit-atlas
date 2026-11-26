@@ -15,6 +15,8 @@ import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import { zetVehicleId } from './services/zetFleet.js';
 import { readVehicleNotices, recordVehicleReport, validateVehicleReport } from './services/vehicleReports.js';
+import User from './models/User.js';
+import { auditDashboard, cleanText, dashboardCollection, feedbackCollection, listBulletins, markRareVehicles, readDashboardSettings } from './services/dashboard.js';
 import { readAnnouncement } from './services/siteAnnouncement.js';
 import secondLookRoutes from './routes/secondlook.js';
 import { apiLimiter, asyncRoute, heavyLimiter, vehiclesLimiter } from './middleware/security.js';
@@ -104,6 +106,9 @@ let gtfsData = {
 const hzppData = { routes: [], stops: [], trips: [], stopTimes: [], stopTimesByStop: new Map(), stopTimeCount: 0, calendar: [], calendarDates: [] };
 let hzppLoaded = false;
 let hzppLastUpdate = null;
+let hzppSearchLastSuccess = null;
+let hzppSearchError = null;
+let hzppSearchRequestStarted = 0;
 let hzppLoadPromise = null;
 const beogradData = { routes: [], stops: [], trips: [], stopTimes: [], stopTimesByStop: new Map(), stopTimeCount: 0, calendar: [], calendarDates: [], shapes: [], agency: [] };
 let beogradLoaded = false;
@@ -116,6 +121,7 @@ let gtfsLoadInProgress = false;
 let gtfsRetryDelay = 60 * 1000;
 let gtfsRetryTimer = null;
 let rtFeedStatus = 'unknown';
+let rtFeedError = null;
 let staleVehiclesDropped = 0;
 let realtimeCache = null;
 let realtimeCacheTime = 0;
@@ -456,6 +462,16 @@ async function fetchRealtimeVehicles() {
   }
 }
 
+setInterval(async () => {
+  if (!process.env.MONGODB_URI || Date.now() - realtimeCacheTime < 55_000 || realtimeFetchPromise) return;
+  try {
+    const catalog = await dashboardCollection('dashboard_rare_vehicles');
+    if (await catalog.findOne({ rare: true }, { projection: { _id: 1 }, maxTimeMS: 2000 })) await fetchRealtimeVehicles();
+  } catch (error) {
+    console.error('[Rare vehicles monitor]', error.name);
+  }
+}, 60_000).unref();
+
 async function fetchRealtimeVehiclesFromZet() {
   const rtUrl = 'https://www.zet.hr/gtfs-rt-protobuf';
   staleVehiclesDropped = 0;
@@ -473,6 +489,7 @@ async function fetchRealtimeVehiclesFromZet() {
     );
 
     rtFeedStatus = 'active';
+    rtFeedError = null;
     const vehicles = [];
     const tripUpdatesByStop = new Map();
     const cancelledTrips = new Set();
@@ -552,12 +569,14 @@ async function fetchRealtimeVehiclesFromZet() {
       }
     }
 
+    await markRareVehicles(vehicles).catch(error => console.error('[Rare vehicles]', error.name));
     staleVehiclesDropped = staleCount;
     console.log(`[GTFS-RT] ✓ Učitano ${vehicles.length} vozila`);
     const vehiclesByTrip = new Map(vehicles.filter(vehicle => vehicle.tripId).map(vehicle => [String(vehicle.tripId), vehicle]));
     return { vehicles, vehiclesByTrip, tripUpdatesByStop, cancelledTrips, staleVehiclesDropped: staleCount };
   } catch (error) {
     rtFeedStatus = 'unavailable';
+    rtFeedError = error.message;
     console.error(`[GTFS-RT] ✗ ${error.message}`);
     return null;
   }
@@ -581,6 +600,9 @@ app.get('/api/vehicles/:cityId', (req, res, next) => {
     });
   }
 
+  if ((await readDashboardSettings()).hideLiveVehicles) {
+    return res.json({ status: 'unavailable', maintenance: true, vehicles: [], lastUpdate: Date.now() });
+  }
   const realtime = await fetchRealtimeVehicles();
 
   if (realtime === null) {
@@ -624,7 +646,10 @@ app.post('/api/auth/vehicle-reports', (req, res, next) => {
 rateLimit({ ...reportLimit, limit: 6, keyGenerator: req => req.session.userId }), asyncRoute(async (req, res) => {
   const report = req.is('application/json') && validateVehicleReport(req.body);
   if (!report) return res.status(400).json({ error: 'Odaberite vozilo i razlog prijave.' });
-  if (!isAuthenticationEnabled()) return res.status(403).json({ error: 'Ova značajka trenutačno nije dostupna.' });
+  if (!isAuthenticationEnabled() || (await readDashboardSettings()).hideLiveVehicles) return res.status(403).json({ error: 'Ova značajka trenutačno nije dostupna.' });
+  if (await User.exists({ _id: req.session.userId, vehicleReportsBlockedUntil: { $gt: new Date() } })) {
+    return res.status(403).json({ error: 'Slanje dojava privremeno je ograničeno za ovaj račun.' });
+  }
   const realtime = await fetchRealtimeVehicles();
   if (!realtime) return res.status(503).json({ error: 'Podaci uživo trenutačno nisu dostupni.' });
   const vehicle = realtime.vehicles.find(item => item.id === report.vehicleId && item.tripId === report.tripId);
@@ -641,11 +666,43 @@ app.use('/api/auth', useAuthSession, attachUser, authRoutes);
 app.use('/api', secondLookRoutes);
 
 app.get('/api/announcement', asyncRoute(async (req, res) => {
-  const [announcement, vehicleNotices] = await Promise.all([readAnnouncement(), readVehicleNotices().catch(error => {
-    console.error('[VehicleReports] ' + error.name);
-    return [];
-  })]);
-  res.set('Cache-Control', 'no-store').json({ announcement, vehicleNotices });
+  const audience = req.query.audience === 'hzpp' ? 'hzpp' : 'zet';
+  const options = await readDashboardSettings();
+  const [announcement, vehicleNotices, bulletins] = await Promise.all([
+    audience === 'zet' ? readAnnouncement() : null,
+    audience === 'zet' && !options.pauseReports ? readVehicleNotices().catch(() => []) : [],
+    listBulletins(audience).catch(() => [])
+  ]);
+  res.set('Cache-Control', 'no-store').json({ announcement, vehicleNotices, bulletins });
+}));
+
+const feedbackLimit = { windowMs: 60 * 60 * 1000, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Previše prijava. Pokušajte kasnije.' } };
+app.post('/api/feedback', requireTrustedOrigin, rateLimit({ ...feedbackLimit, limit: 3 }),
+  rateLimit({ ...feedbackLimit, limit: 100, keyGenerator: () => 'feedback' }), asyncRoute(async (req, res) => {
+    const { category, area } = req.body ?? {};
+    const text = cleanText(req.body?.text, 600);
+    if (!req.is('application/json') || !['map', 'search', 'data', 'other'].includes(category) ||
+      !['zet', 'hzpp', 'other'].includes(area) || !text || text.length < 10) {
+      return res.status(400).json({ error: 'Opišite problem u 10 do 600 znakova.' });
+    }
+    const now = new Date();
+    await (await feedbackCollection()).insertOne({ category, area, text, state: 'open', createdAt: now, expiresAt: new Date(+now + 30 * 86400_000) });
+    res.set('Cache-Control', 'no-store').status(201).json({ message: 'Prijava je zaprimljena.' });
+  }));
+
+function publicStatus(options) {
+  return {
+    message: options.statusMessage,
+    services: {
+      zetLive: { state: options.hideLiveVehicles ? 'maintenance' : rtFeedStatus === 'unknown' ? 'unknown' : rtFeedStatus === 'active' ? 'available' : 'unavailable', updatedAt: realtimeCacheTime || null },
+      zetTimetable: { state: gtfsLoaded ? (gtfsLoadError ? 'degraded' : 'available') : gtfsLoadError ? 'unavailable' : 'unknown', updatedAt: lastGtfsUpdate },
+      hzppSearch: { state: hzppSearchError ? 'unavailable' : hzppSearchLastSuccess ? 'available' : 'unknown', updatedAt: hzppSearchLastSuccess }
+    }
+  };
+}
+app.get('/api/transit-status', asyncRoute(async (req, res) => {
+  res.set('Cache-Control', 'no-store').json(publicStatus(await readDashboardSettings()));
 }));
 
 // Gradovi
@@ -784,6 +841,7 @@ function estimateNextStop(stops, vehicle) {
 
 app.get('/api/vehicle/:vehicleId', asyncRoute(async (req, res) => {
   res.set('Cache-Control', 'no-store');
+  if ((await readDashboardSettings()).hideLiveVehicles) return res.status(503).json({ error: 'Lokacije vozila privremeno su skrivene.' });
   const realtime = await fetchRealtimeVehicles();
   if (!realtime) return res.status(503).json({ error: 'Podaci uživo trenutačno nisu dostupni.' });
   const vehicle = realtime.vehicles.find(item => item.id === req.params.vehicleId);
@@ -850,7 +908,7 @@ app.get('/api/:cityId/stop/:stopId/departures', asyncRoute(async (req, res) => {
   const today = zagrebDateParts(new Date(now));
   const serviceDays = [today, addCalendarDays(today, -1)].map(date => ({ date, active: activeServicesOn(date) }));
   const { tripsById, routesById } = data;
-  const realtime = cityId === 'zagreb' ? await fetchRealtimeVehicles() : null;
+  const realtime = cityId === 'zagreb' && !(await readDashboardSettings()).hideLiveVehicles ? await fetchRealtimeVehicles() : null;
   const stopLat = Number(stop.stop_lat);
   const stopLon = Number(stop.stop_lon);
   const departures = [];
@@ -1003,11 +1061,23 @@ adminRoutes.post('/system/refresh-timetable', asyncRoute(async (req, res) => {
   }
   lastManualTimetableRefresh = Date.now();
   if (!await loadGtfsData()) return res.status(502).json({ error: 'Osvježavanje voznog reda nije uspjelo.' });
+  await auditDashboard('timetable.refresh');
   res.json({ lastGtfsUpdate });
 }));
 
-adminRoutes.get('/system/status', (req, res) => {
+adminRoutes.post('/system/refresh-live', asyncRoute(async (req, res) => {
+  const result = await fetchRealtimeVehicles();
+  if (!result) return res.status(502).json({ error: 'ZET podatke nije moguće osvježiti.' });
+  await auditDashboard('realtime.refresh');
+  res.json({ count: result.vehicles.length });
+}));
+
+adminRoutes.get('/system/status', asyncRoute(async (req, res) => {
   res.json({
+    ...publicStatus(await readDashboardSettings()),
+    vehicles: realtimeCache?.vehicles.length ?? 0,
+    hzppSearchError,
+    rtFeedError,
     gtfsLoaded,
     gtfsLoadError,
     hzppLoaded,
@@ -1030,7 +1100,7 @@ adminRoutes.get('/system/status', (req, res) => {
       beogradStatic: 'https://data.gov.rs/sr/datasets/r/729be9a1-7ed9-453d-9a3d-68fa30f07529'
     }
   });
-});
+}));
 
 // Frontend - statički serviranje
 const frontendDist = join(process.cwd(), 'dist');
@@ -1047,13 +1117,25 @@ async function proxyHzpp(req, res) {
   if (endpoint.includes('busInfo') && (!/^\d+$/.test(query.get('from') || '') || !/^\d+$/.test(query.get('to') || '') || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(query.get('startTime') || ''))) {
     return res.status(400).json({ error: 'Neispravan zahtjev za polaske.' });
   }
+  const searchStarted = endpoint.includes('busInfo') ? Date.now() : 0;
+  function recordSearch(error) {
+    if (!searchStarted || searchStarted < hzppSearchRequestStarted) return;
+    hzppSearchRequestStarted = searchStarted;
+    hzppSearchError = error;
+    if (!error) hzppSearchLastSuccess = new Date();
+  }
   try {
     const upstream = await fetch(`${hzppApiBase}${endpoint}?${query}`, {
       headers: { 'X-device-type': 'PORTAL', deviceType: 'WEB', Language: query.get('lang') || 'hr' },
       signal: AbortSignal.timeout(12000)
     });
-    res.status(upstream.status).set('content-type', upstream.headers.get('content-type') || 'application/json').send(await upstream.text());
+    const contents = await upstream.text();
+    if (upstream.ok && upstream.headers.get('content-type')?.includes('json')) recordSearch(null);
+    else if (upstream.ok) recordSearch('HŽPP je vratio neispravan odgovor.');
+    else if (upstream.status >= 500) recordSearch(`HTTP ${upstream.status}`);
+    res.status(upstream.status).set('content-type', upstream.headers.get('content-type') || 'application/json').send(contents);
   } catch {
+    recordSearch('HŽPP nije odgovorio.');
     res.status(502).json({ error: 'HŽPP trenutačno nije dostupan.' });
   }
 }
@@ -1088,7 +1170,7 @@ app.get('/', (req, res) => {
   }
   res.sendFile(indexPath);
 });
-app.get(['/verify-email', '/reset-password', '/confirm-parent', '/privacy', '/terms', '/cookies', '/delete-account'], (req, res) => {
+app.get(['/verify-email', '/reset-password', '/confirm-parent', '/privacy', '/terms', '/cookies', '/delete-account', '/status', '/feedback'], (req, res) => {
   const indexPath = join(frontendDist, 'index.html');
   if (!existsSync(indexPath)) return res.status(503).send('Frontend nije izgrađen. Pokrenite npm run build.');
   if (['/verify-email', '/reset-password', '/confirm-parent'].includes(req.path.replace(/\/$/, '').toLowerCase())) {

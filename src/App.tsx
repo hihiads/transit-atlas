@@ -1,6 +1,7 @@
 import { t } from './services/i18n';
 import { useState, useEffect } from 'react';
 import MapView from './components/MapView';
+import SiteAnnouncement from './components/SiteAnnouncement';
 import Header from './components/Header';
 import LanguageSelect from './components/LanguageSelect';
 import FilterPanel from './components/FilterPanel';
@@ -37,6 +38,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [transitDataLoading, setTransitDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [maintenance, setMaintenance] = useState(false);
   const [dataStatus, setDataStatus] = useState<'demo' | 'live' | 'unavailable'>('demo');
   const [showStops, setShowStops] = useState(false);
   const [showShapes, setShowShapes] = useState(false);
@@ -142,6 +144,7 @@ function App() {
         if (cancelled) return;
         setVehicles(response.vehicles);
         setDataStatus(response.status);
+        setMaintenance(Boolean(response.maintenance));
       })
       .catch(() => {
         if (cancelled) return;
@@ -207,8 +210,11 @@ function App() {
       if (selectedCity.status === 'active') {
         api.getVehicles(selectedCity.id)
           .then(response => {
+            if (cancelled) return;
             setVehicles(response.vehicles);
             setDataStatus(response.status);
+            setMaintenance(Boolean(response.maintenance));
+            if (response.maintenance) { setSelectedVehicle(null); setProfileVehicle(null); }
           })
           .catch(() => {});
       }
@@ -313,6 +319,8 @@ function App() {
 
   return (
     <div className="w-full h-full flex flex-col">
+      <SiteAnnouncement line={selectedVehicle?.line || selectedLine} />
+      {maintenance && <p className="shrink-0 bg-amber-100 px-3 py-2 text-sm text-amber-950">{t("Lokacije vozila privremeno su skrivene.")}</p>}
       <Header
         vehicleCount={filteredVehicles.length}
         totalVehicles={vehicles.length}
@@ -337,25 +345,29 @@ function App() {
         menuContent={<>
           <LanguageSelect />
           <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)} className="mb-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
-          <div className="grid grid-cols-1 gap-2">
+          <details className="mb-2 rounded-xl border border-slate-200 bg-white p-2">
+            <summary className="cursor-pointer rounded-lg px-2 py-2 text-sm font-semibold">{t("Postavke karte")}</summary>
+            <div className="grid grid-cols-1 gap-2 pt-2">
             <button onClick={() => { findMyLocation(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? t("Tražim lokaciju…") : t("Moja lokacija")}</button>
             <button onClick={() => { findNearestStop(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? t("Tražim…") : t("Moja najbliža stanica")}</button>
-            <button onClick={() => { setShowSchedule(true); setShowMapMenu(false); }} className="min-h-11 rounded-xl bg-[#102638] px-3 py-2.5 text-left text-sm font-semibold text-white shadow-sm">{t("Linije i polasci")}</button>
             <button onClick={() => setShowStops(!showStops)} aria-pressed={showStops} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showStops ? t("✓ Sakrij stanice") : t("Prikaži stanice")}</button>
             <button onClick={() => setShowShapes(!showShapes)} aria-pressed={showShapes} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showShapes ? t("✓ Sakrij trase linija") : t("Prikaži trase linija")}</button>
-          </div>
+            </div>
+          </details>
           {locationMessage && <p className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-700" role="status">{locationMessage}</p>}
           {selectedCity.status === 'unavailable' && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t("Podaci za") + " "}{selectedCity.name}{" " + t("još nisu dostupni.")}</p>}
-          {dataStatus === 'live' && <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{t("✓ Podaci uživo · lokacije koje šalje ZET.")}</p>}
-          {dataStatus === 'unavailable' && selectedCity.id === 'zagreb' && <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{t("Lokacije trenutačno nisu dostupne. Pokušajte ponovno kasnije.")}</p>}
-          <nav aria-label={t("Pravne informacije")} className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-sm font-semibold text-slate-700">
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/privacy">{t("Privatnost")}</a>
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/about/">{t("O Transitlyju")}</a>
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/terms">{t("Uvjeti korištenja")}</a>
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/cookies">{t("Kolačići")}</a>
-            <a className="rounded-lg px-2 py-2 hover:bg-white" href="mailto:info@transitly.eu">{t("Kontakt")}</a>
+          <nav aria-label={t("Pomoć")} className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200 pt-2 text-sm font-semibold">
+            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/status">{t("Stanje usluga")}</a>
+            <a className="rounded-lg px-2 py-2 hover:bg-white" href="/feedback">{t("Prijavi grešku")}</a>
           </nav>
-          <p className="mt-2 text-xs text-slate-500">{t("Transitly vodi Din Mulajusufović")}</p>
+          <details className="mt-2 text-xs text-slate-600">
+            <summary className="cursor-pointer rounded-lg px-2 py-2">{t("O aplikaciji i pravne informacije")}</summary>
+            <div className="grid grid-cols-2 gap-2 px-2 pb-2">
+              <a href="/about/">{t("O Transitlyju")}</a><a href="/privacy">{t("Privatnost")}</a>
+              <a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Kolačići")}</a>
+              <a href="mailto:info@transitly.eu">{t("Kontakt")}</a>
+            </div>
+          </details>
         </>}
       />
 

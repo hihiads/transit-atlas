@@ -15,6 +15,7 @@ export default function VehicleSearch({ vehicles, onSelect, onClose }: {
     if (ids.includes(term)) return [{ vehicle, rank: 0 }];
     if (vehicle.line.toUpperCase() === term) return [{ vehicle, rank: 1 }];
     if (vehicle.line.toUpperCase().startsWith(term) || ids.some(id => id.startsWith(term))) return [{ vehicle, rank: 2 }];
+    if (vehicle.model?.toUpperCase().includes(term)) return [{ vehicle, rank: 2 }];
     return [];
   }).sort((a, b) => a.rank - b.rank) : [];
 
@@ -33,7 +34,7 @@ export default function VehicleSearch({ vehicles, onSelect, onClose }: {
         {matches.slice(0, 24).map(({ vehicle }) => <li key={vehicle.id}>
           <button type="button" onClick={() => onSelect(vehicle)} className="block min-h-11 w-full rounded-lg px-3 py-2 text-left hover:bg-slate-100">
             <span className="block text-sm font-bold">{t("Linija") + " "}{vehicle.line} · {vehicle.type === 'bus' ? t("Autobus") : vehicle.type === 'tram' ? t("Tramvaj") : t("Vozilo")}{vehicle.zetId && ` · ${vehicle.zetId}`}</span>
-            <span className="block truncate text-xs text-slate-600">{vehicle.direction}</span>
+            <span className="block truncate text-xs text-slate-600">{vehicle.direction}{vehicle.rare && ` · ${t("Rijetko vozilo")}`}</span>
           </button>
         </li>)}
       </ul>}

@@ -10,6 +10,8 @@ export interface Vehicle {
   garageNumber?: string | null;
   registrationNumber?: string | null;
   model?: string;
+  rare?: boolean;
+  modelSource?: string;
   lowFloor?: boolean;
   currentStopSequence?: number | null;
   currentStatus?: number | null;
@@ -68,6 +70,7 @@ export interface City {
 export interface VehicleResponse {
   status: 'demo' | 'live' | 'unavailable';
   message?: string;
+  maintenance?: boolean;
   lastUpdate: number;
   staleVehiclesDropped?: number;
   vehicles: Vehicle[];

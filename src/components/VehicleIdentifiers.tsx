@@ -9,6 +9,10 @@ export default function VehicleIdentifiers({ vehicle }: { vehicle: Vehicle }) {
         <dt className="text-xs text-slate-600">{t("ZET ID")}</dt>
         <dd className="font-semibold">{id || '—'}</dd>
       </div>
+      {(vehicle.rare || vehicle.modelSource) && <div>
+        <dt className="text-xs font-semibold text-amber-700">{vehicle.rare ? t("Rijetko vozilo") : t("Model")}</dt>
+        <dd>{vehicle.modelSource ? <a href={vehicle.modelSource} target="_blank" rel="noreferrer" className="underline">{vehicle.model}</a> : vehicle.model}</dd>
+      </div>}
       {vehicle.type === 'bus' && <div>
         <dt className="text-xs text-slate-600">{t("Registracija vozila")}</dt>
         <dd className="font-semibold">{vehicle.registrationNumber || t("Nije dostupna")}</dd>

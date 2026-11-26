@@ -1,5 +1,5 @@
 import { hasStrongAdminPassword, isDev } from '../config/env.js';
-import { createHash, timingSafeEqual, randomBytes } from 'crypto';
+import { createHash, timingSafeEqual, randomBytes, randomUUID } from 'crypto';
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { getRuntimeSettings, isAuthenticationEnabled, missingAuthenticationEnvironment, saveRuntimeSettings } from '../config/runtimeSettings.js';
@@ -8,6 +8,8 @@ import { adminLimiter, adminTotpLimiter, asyncRoute } from '../middleware/securi
 import { requireTrustedOrigin } from '../config/origins.js';
 import { requireAdminAccess } from '../middleware/adminAccess.js';
 import { adminTotpConfigured, consumeAdminTotp } from '../middleware/adminTotp.js';
+import dashboardRoutes from './dashboard.js';
+import { auditDashboard } from '../services/dashboard.js';
 import { readAnnouncement, publishAnnouncement, unpublishAnnouncement } from '../services/siteAnnouncement.js';
 
 const router = express.Router();
@@ -28,6 +30,7 @@ function requireAdmin(req, res, next) {
     adminSessions.delete(key);
     return res.status(401).json({ error: 'Prijavite se u administratorski panel.' });
   }
+  req.adminSessionKey = key;
   next();
 }
 
@@ -68,6 +71,9 @@ router.post('/login', adminLimiter, body('password').isString().isLength({ min: 
   }
   const token = randomBytes(32).toString('hex');
   adminSessions.set(createHash('sha256').update(token).digest('hex'), {
+    id: randomUUID(),
+    createdAt: now,
+    browser: (req.get('user-agent') || '').slice(0, 160),
     expiresAt: now + cookieOptions.maxAge
   });
   console.info(JSON.stringify({ event: 'admin.login', outcome: 'success' }));
@@ -75,6 +81,32 @@ router.post('/login', adminLimiter, body('password').isString().isLength({ min: 
 });
 
 router.use(requireAdmin);
+router.use('/dashboard', dashboardRoutes);
+
+router.get('/sessions', (req, res) => {
+  const now = Date.now();
+  res.json([...adminSessions].filter(([, session]) => session.expiresAt > now).map(([key, session]) => ({
+    ...session, current: key === req.adminSessionKey
+  })));
+});
+
+router.delete('/sessions/others', asyncRoute(async (req, res) => {
+  for (const [key] of adminSessions) if (key !== req.adminSessionKey) adminSessions.delete(key);
+  await auditDashboard('sessions.revoke_others');
+  res.sendStatus(204);
+}));
+
+router.delete('/sessions/:id', asyncRoute(async (req, res) => {
+  const pair = [...adminSessions].find(([, session]) => session.id === req.params.id);
+  if (!pair) return res.sendStatus(404);
+  adminSessions.delete(pair[0]);
+  if (pair[0] === req.adminSessionKey) {
+    const { maxAge, ...clearOptions } = cookieOptions;
+    res.clearCookie(cookieName, clearOptions);
+  }
+  await auditDashboard('sessions.revoke');
+  res.sendStatus(204);
+}));
 
 router.get('/announcement', asyncRoute(async (req, res) => {
   res.json({ announcement: await readAnnouncement() });
@@ -88,6 +120,7 @@ router.put('/announcement',
     if (!validationResult(req).isEmpty()) return res.status(400).json({ error: 'Unesite poruku i odaberite vrijeme isteka u budućnosti.' });
     if (!process.env.MONGODB_URI) return res.status(503).json({ error: 'Za objavu najava potrebna je MongoDB veza.' });
     const announcement = await publishAnnouncement(req.body);
+    await auditDashboard('announcement.publish');
     console.info(JSON.stringify({ event: 'admin.announcement_published' }));
     res.json({ announcement });
   })
@@ -96,6 +129,7 @@ router.put('/announcement',
 router.delete('/announcement', asyncRoute(async (req, res) => {
   if (!process.env.MONGODB_URI) return res.status(503).json({ error: 'Za objavu najava potrebna je MongoDB veza.' });
   await unpublishAnnouncement();
+  await auditDashboard('announcement.withdraw');
   console.info(JSON.stringify({ event: 'admin.announcement_unpublished' }));
   res.json({ announcement: null });
 }));
@@ -134,6 +168,7 @@ router.patch('/settings',
     }
     try {
       const settings = await saveRuntimeSettings(next);
+      await auditDashboard('auth.settings');
       console.info(JSON.stringify({ event: 'admin.settings_changed', settings }));
       res.json({ settings, authenticationActive: next.loginEnabled || next.registrationEnabled });
     } catch (error) {

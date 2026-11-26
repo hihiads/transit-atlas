@@ -80,6 +80,10 @@ test('admin requires its own host and an unused authenticator code before issuin
     assert.equal(redirect.headers['cache-control'], 'no-store');
   }
   assert.equal((await send('/api/admin/settings', { headers })).statusCode, 401);
+  for (const path of ['/dashboard/controls', '/dashboard/feedback', '/dashboard/audit', '/sessions']) {
+    assert.equal((await send('/api/admin' + path, { headers })).statusCode, 401);
+    assert.equal((await send('/api/admin' + path, { headers: { host: 'transitly.test' } })).statusCode, 404);
+  }
   assert.equal((await send('/api/admin/announcement', { headers: { ...headers, origin }, method: 'PUT', body: {} })).statusCode, 401);
   assert.equal((await post({ password, code }, 'https://transitly.test')).statusCode, 403);
   assert.equal((await post({ password })).statusCode, 401);
@@ -103,7 +107,12 @@ test('admin requires its own host and an unused authenticator code before issuin
     };
     process.env.MONGODB_URI = 'mongodb://127.0.0.1/fixture';
     Object.defineProperty(mongoose.connection, 'readyState', { configurable: true, value: 1 });
-    mongoose.connection.db = { collection: name => { assert.equal(name, 'site_announcements'); return collection; } };
+    const audit = [];
+    mongoose.connection.db = { collection: name => {
+      if (name === 'dashboard_audit') return { insertOne: async entry => { audit.push(entry.action); } };
+      assert.equal(name, 'site_announcements');
+      return collection;
+    } };
     t.after(() => {
       if (previousUri === undefined) delete process.env.MONGODB_URI; else process.env.MONGODB_URI = previousUri;
       delete mongoose.connection.readyState;
@@ -121,6 +130,7 @@ test('admin requires its own host and an unused authenticator code before issuin
     assert.equal((await change('PUT', { text: 'Diversion', level: 'info', expiresAt: new Date(60000).toISOString() })).statusCode, 200);
     clock.tick(1001);
     assert.equal(await readAnnouncement(), null);
+    assert.deepEqual(audit, ['announcement.publish', 'announcement.withdraw', 'announcement.publish']);
   });
   assert.equal((await send('/api/admin/logout', { headers: { ...headers, origin }, method: 'POST' })).statusCode, 200);
   assert.equal((await send('/api/admin/settings', { headers })).statusCode, 401);

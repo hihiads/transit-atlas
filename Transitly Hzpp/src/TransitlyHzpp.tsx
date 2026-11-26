@@ -3,6 +3,7 @@ import { locale, t } from '../../src/services/i18n';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import AuthModal from '../../src/components/Auth/AuthModal';
 import CookieNotice from '../../src/components/CookieNotice';
+import SiteAnnouncement from '../../src/components/SiteAnnouncement';
 import LanguageSelect from '../../src/components/LanguageSelect';
 import { api, AuthStatus } from '../../src/api';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -214,6 +215,7 @@ export default function TransitlyHzpp() {
   if (loadingStations) return <div className="transit-loader-page"><TransitLoadingAnimation mode="train" label={t("Učitavamo HŽPP stanice…")} /></div>;
 
   return <main className="app-shell">
+    <SiteAnnouncement audience="hzpp" />
     <header className="topbar">
       <div className="brand-group"><a className="brand" href="/" aria-label={t("Transitly početna stranica")}><span className="brand-icon"><Icon name="train" size={21} /></span></a><label className="sr-only" htmlFor="hzpp-provider">{t("Odaberi prijevoznika")}</label><select id="hzpp-provider" aria-label={t("Odaberi prijevoznika")} value="hzpp" onChange={event => { if (event.target.value === 'zet') window.location.assign('/'); }}><option value="zet">ZET</option><option value="hzpp">HŽPP</option></select>
         <div className="site-menu-wrap">
@@ -221,8 +223,11 @@ export default function TransitlyHzpp() {
           {showSiteMenu && <nav id="hzpp-site-menu" className="site-menu" aria-label={t("Informacije o Transitlyju")}>
             <LanguageSelect />
             <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)}>{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
-            <a href="/privacy">{t("Privatnost")}</a><a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Kolačići")}</a><a href={`mailto:${email}`}>{t("Kontakt i prijava greške")}</a>
-            <p>{t("Transitly vodi") + " "}<strong>Din Mulajusufović</strong></p>
+            <a href="/status?area=hzpp">{t("Stanje usluga")}</a><a href="/feedback?area=hzpp">{t("Prijavi grešku")}</a>
+            <details>
+              <summary>{t("O aplikaciji i pravne informacije")}</summary>
+              <a href="/privacy">{t("Privatnost")}</a><a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Kolačići")}</a><a href={`mailto:${email}`}>{t("Kontakt")}</a>
+            </details>
           </nav>}
         </div>
       </div>

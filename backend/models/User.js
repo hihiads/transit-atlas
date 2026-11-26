@@ -28,6 +28,7 @@ const userSchema = new mongoose.Schema({
   guardianConsentAt: { type: Date, default: null },
   termsVersion: { type: String, default: null },
   termsAcceptedAt: { type: Date, default: null },
+  vehicleReportsBlockedUntil: { type: Date, select: false },
   sessionVersion: {
     type: Number,
     default: 0

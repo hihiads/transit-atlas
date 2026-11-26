@@ -72,7 +72,7 @@ export default function VehicleCard({ vehicle, onClose, onViewProfile, onRequire
 
           <VehicleIdentifiers vehicle={vehicle} />
 
-          {vehicle.model && (
+          {vehicle.model && !vehicle.rare && !vehicle.modelSource && (
             <div>
               <div className="text-sm text-gray-500">Model</div>
               <div className="text-lg font-medium">{vehicle.model}</div>

@@ -68,3 +68,5 @@ html[data-theme='dark'] .leaflet-control-attribution { background:rgba(20,30,42,
 html[data-theme='dark'] .leaflet-control-attribution a { color:#7dd3fc !important; }
 html[data-theme='dark'] .leaflet-control-zoom a { background:#17212d !important; color:#e2e8f0 !important; border-color:#344252 !important; }
 html[data-theme='dark'] .leaflet-popup-content-wrapper, html[data-theme='dark'] .leaflet-popup-tip { background:#17212d; color:#e2e8f0; }
+
+.rare-marker { outline: 3px solid #d97706; outline-offset: 2px; border-radius: 50%; }

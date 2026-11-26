@@ -34,6 +34,9 @@ const unknownIcon = L.divIcon({
   iconAnchor: [16, 16]
 });
 
+const rareBusIcon = L.divIcon({ ...busIcon.options, className: 'custom-marker rare-marker' });
+const rareTramIcon = L.divIcon({ ...tramIcon.options, className: 'custom-marker rare-marker' });
+
 interface MapViewProps {
   vehicles: Vehicle[];
   stops: Stop[];
@@ -142,7 +145,7 @@ export default function MapView({
         <Marker
           key={vehicle.id}
           position={[vehicle.lat, vehicle.lon]}
-          icon={vehicle.type === 'bus' ? busIcon : vehicle.type === 'tram' ? tramIcon : unknownIcon}
+          icon={vehicle.type === 'bus' ? (vehicle.rare ? rareBusIcon : busIcon) : vehicle.type === 'tram' ? (vehicle.rare ? rareTramIcon : tramIcon) : unknownIcon}
           title={`${vehicle.type === 'tram' ? t("Tramvaj") : vehicle.type === 'bus' ? t("Autobus") : t("Vozilo")} linije ${vehicle.line}, smjer ${vehicle.direction}`}
           alt={`${vehicle.type === 'tram' ? t("Tramvaj") : vehicle.type === 'bus' ? t("Autobus") : t("Vozilo")} linije ${vehicle.line}`}
           eventHandlers={{
@@ -154,6 +157,7 @@ export default function MapView({
               <div className="font-bold text-lg">{t("Linija") + " "}{vehicle.line}</div>
               <div className="text-xs font-medium text-gray-500">{vehicle.type === 'tram' ? t("Tramvaj") : vehicle.type === 'bus' ? t("Autobus") : t("Tip vozila nije dostupan")}</div>
               <div className="text-sm text-gray-600">{vehicle.direction}</div>
+              {vehicle.rare && <div className="font-semibold text-amber-800">{t("Rijetko vozilo")}</div>}
               {vehicle.garageNumber && (
                 <div className="text-xs text-gray-500 mt-1">{t("Vozilo:") + " "}{vehicle.garageNumber}
                 </div>

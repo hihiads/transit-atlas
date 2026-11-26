@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { API_ROOT } from '../services/platform';
-import { t } from '../services/i18n';
+import { language, t } from '../services/i18n';
 
 export interface Announcement {
   text: string;
@@ -29,9 +29,24 @@ interface VehicleNotice {
   expiresAt: string;
 }
 
-export default function SiteAnnouncement() {
+export interface Bulletin {
+  _id: string;
+  text: string;
+  textEn: string;
+  level: Announcement['level'];
+  kind: 'announcement' | 'detour' | 'stop' | 'replacement';
+  audience: 'all' | 'zet' | 'hzpp';
+  line: string | null;
+  startsAt: string;
+  expiresAt: string;
+}
+
+export const bulletinKinds = { announcement: 'Najava', detour: 'Obilazak', stop: 'Preskočeno stajalište', replacement: 'Zamjenski autobus' };
+
+export default function SiteAnnouncement({ audience = 'zet', line = '' }: { audience?: 'zet' | 'hzpp'; line?: string }) {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [vehicleNotices, setVehicleNotices] = useState<VehicleNotice[]>([]);
+  const [bulletins, setBulletins] = useState<Bulletin[]>([]);
   const [dismissedAt, setDismissedAt] = useState('');
 
   useEffect(() => {
@@ -42,13 +57,15 @@ export default function SiteAnnouncement() {
       pending = controller;
       setAnnouncement(current => current?.expiresAt && Date.parse(current.expiresAt) <= Date.now() ? null : current);
       setVehicleNotices(current => current.filter(notice => Date.parse(notice.expiresAt) > Date.now()));
+      setBulletins(current => current.filter(notice => Date.parse(notice.expiresAt) > Date.now()));
       try {
-        const response = await fetch(API_ROOT + '/announcement', { signal: controller.signal });
+        const response = await fetch(API_ROOT + '/announcement?audience=' + audience, { signal: controller.signal });
         if (!response.ok) return;
-        const { announcement, vehicleNotices } = await response.json();
+        const { announcement, vehicleNotices, bulletins } = await response.json();
         if (!controller.signal.aborted) {
           setAnnouncement(announcement);
           setVehicleNotices(vehicleNotices ?? []);
+          setBulletins(bulletins ?? []);
         }
       } catch {
         // Keep the last active announcement if the connection temporarily drops.
@@ -57,9 +74,14 @@ export default function SiteAnnouncement() {
     void refresh();
     const timer = window.setInterval(refresh, 30_000);
     return () => { pending?.abort(); window.clearInterval(timer); };
-  }, []);
+  }, [audience]);
 
+  const relevant = bulletins.filter(entry => !line || !entry.line || line === entry.line);
   return <>
+    {relevant.length > 0 && <section aria-label={t("Obavijesti o prometu")} className="max-h-[22dvh] shrink-0 overflow-y-auto">
+      {relevant.map(entry => <AnnouncementBanner key={entry._id} level={entry.level}
+        text={(entry.line ? `${t("Linija")} ${entry.line} · ${t(bulletinKinds[entry.kind])} · ` : '') + (language === 'en' && entry.textEn ? entry.textEn : entry.text)} />)}
+    </section>}
     {announcement && announcement.updatedAt !== dismissedAt && <AnnouncementBanner {...announcement} onDismiss={() => setDismissedAt(announcement.updatedAt)} />}
     {vehicleNotices.length > 0 && <section aria-label={t("Dojave putnika")} className="max-h-[22dvh] shrink-0 overflow-y-auto border-b border-amber-300 bg-amber-100 px-3 py-2 text-sm text-amber-950">
       <h2 className="text-xs font-bold">{t("Dojave putnika")}</h2>
