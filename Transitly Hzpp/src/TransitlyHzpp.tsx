@@ -395,7 +395,7 @@ export default function TransitlyHzpp() {
               {legs.length > 0 && <div className="route-legs" aria-label={t("Relacija vlaka")}>{legs.map((leg, legIndex) => {
                 const line = journeyDetails[`${journeyKey}:${legIndex}`]?.route;
                 return <span key={`${leg.Number}-${legIndex}`}>
-                  <strong>{t("Vlak") + " "}{leg.Number}{leg.DepartureDateTime ? " · " + time(leg.DepartureDateTime) : ""}</strong>
+                  <strong>{t("Vlak") + " "}{leg.Number}</strong>
                   <b>{line ? `${line.from} – ${line.to}` : `${leg.Start?.Name || '—'} → ${leg.Dest?.Name || '—'}`}</b>
                 </span>;
               })}</div>}
