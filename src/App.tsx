@@ -298,6 +298,16 @@ function App() {
     setFilteredVehicles(filtered);
   }, [vehicles, selectedType, selectedLine]);
 
+  const selectedTripId = selectedVehicle?.tripId ?? null;
+  useEffect(() => {
+    if (!selectedCity || !selectedTripId || !showSelectedRoute) { setTripStops([]); return; }
+    const controller = new AbortController();
+    api.getTripStops(selectedCity.id, selectedTripId, controller.signal)
+      .then(response => setTripStops(response.stops.map(stop => ({ ...stop, cityId: selectedCity.id }))))
+      .catch(() => { if (!controller.signal.aborted) setTripStops([]); });
+    return () => controller.abort();
+  }, [selectedCity, selectedTripId, showSelectedRoute]);
+
   if (loading || authStatusLoading || transitDataLoading) {
     return (
       <div className="transit-loader-page"><TransitLoadingAnimation mode="tram" label={t("Učitavam ZET i Transitly podatke…")} /></div>
@@ -318,16 +328,6 @@ function App() {
   const selectedRouteId = selectedVehicle
     ? selectedVehicle.routeId ?? routes.find(route => route.shortName === selectedVehicle.line)?.id ?? null
     : null;
-
-  const selectedTripId = selectedVehicle?.tripId ?? null;
-  useEffect(() => {
-    if (!selectedCity || !selectedTripId || !showSelectedRoute) { setTripStops([]); return; }
-    const controller = new AbortController();
-    api.getTripStops(selectedCity.id, selectedTripId, controller.signal)
-      .then(response => setTripStops(response.stops.map(stop => ({ ...stop, cityId: selectedCity.id }))))
-      .catch(() => { if (!controller.signal.aborted) setTripStops([]); });
-    return () => controller.abort();
-  }, [selectedCity, selectedTripId, showSelectedRoute]);
 
   if (!selectedCity) {
     return (
