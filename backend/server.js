@@ -837,8 +837,9 @@ async function buildShapeResponse(data, filePath) {
 
 function tripStopsFor(data, tripId) {
   const entries = data.stopTimesByTrip?.get(String(tripId).trim()) ?? [];
+  const stride = data.stopTimesByTripStride || 2;
   const stops = [];
-  for (let index = 0; index < entries.length; index += 2) {
+  for (let index = 0; index + stride <= entries.length; index += stride) {
     const stop = data.stops[entries[index]];
     if (stop) stops.push({ id: String(stop.stop_id), sequence: entries[index + 1], lat: Number(stop.stop_lat), lon: Number(stop.stop_lon) });
   }
