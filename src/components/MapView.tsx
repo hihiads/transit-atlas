@@ -46,6 +46,7 @@ interface MapViewProps {
   zoom: number;
   showStops: boolean;
   showShapes: boolean;
+  selectedRouteId?: string | null;
   showBikes?: boolean;
   userLocation?: [number, number];
   onVehicleClick: (vehicle: Vehicle) => void;
@@ -70,6 +71,7 @@ export default function MapView({
   zoom,
   showStops,
   showShapes,
+  selectedRouteId = null,
   showBikes = false,
   userLocation,
   onVehicleClick,
@@ -98,6 +100,14 @@ export default function MapView({
           key={shape.id}
           positions={shape.coordinates}
           pathOptions={{ color: shape.color ? `#${shape.color}` : '#2563eb', weight: 3, opacity: 0.5 }}
+        />
+      ))}
+
+      {selectedRouteId && shapes.filter(shape => shape.routeId === selectedRouteId && shape.coordinates.length > 1).map(shape => (
+        <Polyline
+          key={`selected-${shape.id}`}
+          positions={shape.coordinates}
+          pathOptions={{ color: shape.color ? `#${shape.color}` : '#2563eb', weight: 5, opacity: 0.9 }}
         />
       ))}
 

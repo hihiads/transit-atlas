@@ -500,6 +500,8 @@
   "Procijenjeni dolazak u {0}: {1} (planirano {2}).": "Estimated arrival at {0}: {1} (scheduled {2}).",
   "Obavijesti nisu podržane u ovom pregledniku.": "Notifications are not supported in this browser.",
   "Prikaži trase linija": "Show route paths",
+  "✓ Isključi trasu odabrane linije": "✓ Turn off selected line route",
+  "Prikaži trasu odabrane linije": "Show selected line route",
   "Privatnost": "Privacy",
   "Procijenjeni dolazak": "Estimated arrival",
   "Procijenjeni polazak": "Estimated departure",
