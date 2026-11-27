@@ -43,5 +43,7 @@ export async function activateAuthentication() {
 
 export async function deleteUserSessions(userId) {
   if (!sessionCollection) return;
-  await sessionCollection.deleteMany({ session: { $regex: `"userId":"${userId}"` } });
+  const id = String(userId);
+  if (!/^[a-f0-9]{24}$/i.test(id)) throw new Error('Invalid user id');
+  await sessionCollection.deleteMany({ session: { $regex: `"userId":"${id}"` } });
 }

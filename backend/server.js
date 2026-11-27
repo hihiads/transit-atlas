@@ -34,6 +34,9 @@ const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const publicUrl = process.env.RENDER_EXTERNAL_URL || (!isDev ? 'https://transit-atlas.onrender.com' : `http://localhost:${PORT}`);
 
+if (isDev && (process.env.RENDER || process.env.RENDER_EXTERNAL_URL)) {
+  throw new Error('NODE_ENV=development nije dopušten na produkcijskom hostingu');
+}
 await loadRuntimeSettings();
 if (!hasStrongAdminPassword()) {
   throw new Error('ADMIN_PANEL_PASSWORD mora biti jedinstvena nasumična lozinka od 24 do 256 znakova');
@@ -918,6 +921,24 @@ app.get('/api/:cityId/trip/:tripId/stops', (req, res) => {
   res.json({ stops, status: stops.length ? 'loaded' : 'unavailable' });
 });
 
+const activeServiceCache = new WeakMap();
+function activeServicesFor(data, date) {
+  const ymd = `${date.year}${String(date.month).padStart(2, '0')}${String(date.day).padStart(2, '0')}`;
+  let byDate = activeServiceCache.get(data.calendar);
+  if (!byDate) activeServiceCache.set(data.calendar, byDate = new Map());
+  const cached = byDate.get(ymd);
+  if (cached) return cached;
+  const weekday = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay()];
+  const active = new Set(data.calendar.filter(x => ymd >= String(x.start_date) && ymd <= String(x.end_date) && String(x[weekday]) === '1').map(x => String(x.service_id)));
+  for (const row of data.calendarDates.filter(x => String(x.date) === ymd)) {
+    if (String(row.exception_type) === '1') active.add(String(row.service_id));
+    else active.delete(String(row.service_id));
+  }
+  if (byDate.size >= 8) byDate.delete(byDate.keys().next().value);
+  byDate.set(ymd, active);
+  return active;
+}
+
 // Polasci sa stanice
 app.get('/api/:cityId/stop/:stopId/departures', asyncRoute(async (req, res) => {
   const { cityId, stopId } = req.params;
@@ -936,16 +957,7 @@ app.get('/api/:cityId/stop/:stopId/departures', asyncRoute(async (req, res) => {
 
   const now = Date.now();
   const dateKey = date => `${date.year}${String(date.month).padStart(2, '0')}${String(date.day).padStart(2, '0')}`;
-  const activeServicesOn = date => {
-    const ymd = dateKey(date);
-    const weekday = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay()];
-    const active = new Set(data.calendar.filter(x => ymd >= String(x.start_date) && ymd <= String(x.end_date) && String(x[weekday]) === '1').map(x => String(x.service_id)));
-    for (const row of data.calendarDates.filter(x => String(x.date) === ymd)) {
-      if (String(row.exception_type) === '1') active.add(String(row.service_id));
-      else active.delete(String(row.service_id));
-    }
-    return active;
-  };
+  const activeServicesOn = date => activeServicesFor(data, date);
   const today = zagrebDateParts(new Date(now));
   const serviceDays = [today, addCalendarDays(today, -1)].map(date => ({ date, active: activeServicesOn(date) }));
   const { tripsById, routesById } = data;
