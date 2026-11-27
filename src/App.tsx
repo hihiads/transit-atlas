@@ -46,6 +46,7 @@ function App() {
   const [showStops, setShowStops] = useState(false);
   const [showShapes, setShowShapes] = useState(false);
   const [showSelectedRoute, setShowSelectedRoute] = useState(() => localStorage.getItem('transit-show-selected-route') !== '0');
+  const [tripStops, setTripStops] = useState<Stop[]>([]);
   const [showBikes, setShowBikes] = useState(() => localStorage.getItem('transit-show-bikes') === '1');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([45.815, 15.9819]);
@@ -318,6 +319,16 @@ function App() {
     ? selectedVehicle.routeId ?? routes.find(route => route.shortName === selectedVehicle.line)?.id ?? null
     : null;
 
+  const selectedTripId = selectedVehicle?.tripId ?? null;
+  useEffect(() => {
+    if (!selectedCity || !selectedTripId || !showSelectedRoute) { setTripStops([]); return; }
+    const controller = new AbortController();
+    api.getTripStops(selectedCity.id, selectedTripId, controller.signal)
+      .then(response => setTripStops(response.stops.map(stop => ({ ...stop, cityId: selectedCity.id }))))
+      .catch(() => { if (!controller.signal.aborted) setTripStops([]); });
+    return () => controller.abort();
+  }, [selectedCity, selectedTripId, showSelectedRoute]);
+
   if (!selectedCity) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[#f3f7f6]">
@@ -390,7 +401,7 @@ function App() {
           <div className="absolute left-14 right-3 top-2 z-[999] md:hidden">
             <FilterPanel compact vehicles={vehicles} routes={routes} selectedType={selectedType} selectedLine={selectedLine} onTypeChange={(type) => { setSelectedType(type); setSelectedLine(''); }} onLineChange={setSelectedLine} />
           </div>
-        {selectedCity.status === 'active' ? <MapView vehicles={filteredVehicles} stops={showStops ? stops : []} shapes={shapes} center={mapCenter} zoom={mapZoom} userLocation={userLocation} showStops={showStops} showShapes={showShapes} selectedRouteId={showSelectedRoute ? selectedRouteId : null} showBikes={showBikes} onVehicleClick={setSelectedVehicle} onStopClick={(stop) => { setNearestDistance(null); setSelectedStop(stop); }} /> : <div className="flex h-full w-full items-center justify-center bg-gray-100"><div className="max-w-md p-8 text-center"><div className="mb-2 text-2xl font-bold text-gray-800">{selectedCity.name}</div><div className="mb-4 text-gray-600">{t("Podaci uživo trenutno nisu dostupni za ovaj grad.")}</div><div className="text-sm text-gray-500">{t("Uskoro ćemo dodati podršku za više gradova.")}</div></div></div>}
+        {selectedCity.status === 'active' ? <MapView vehicles={filteredVehicles} stops={showStops ? stops : []} shapes={shapes} center={mapCenter} zoom={mapZoom} userLocation={userLocation} showStops={showStops} showShapes={showShapes} selectedRouteId={showSelectedRoute ? selectedRouteId : null} routeStops={showSelectedRoute ? tripStops : []} showBikes={showBikes} onVehicleClick={setSelectedVehicle} onStopClick={(stop) => { setNearestDistance(null); setSelectedStop(stop); }} /> : <div className="flex h-full w-full items-center justify-center bg-gray-100"><div className="max-w-md p-8 text-center"><div className="mb-2 text-2xl font-bold text-gray-800">{selectedCity.name}</div><div className="mb-4 text-gray-600">{t("Podaci uživo trenutno nisu dostupni za ovaj grad.")}</div><div className="text-sm text-gray-500">{t("Uskoro ćemo dodati podršku za više gradova.")}</div></div></div>}
         </div>
       </div>
       {selectedVehicle && (

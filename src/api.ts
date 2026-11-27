@@ -1,4 +1,4 @@
-import { City, VehicleResponse, VehicleProfile, StopsResponse, RoutesResponse, StopDeparturesResponse, SystemStatus, TransitShape } from './types';
+import { Stop, City, VehicleResponse, VehicleProfile, StopsResponse, RoutesResponse, StopDeparturesResponse, SystemStatus, TransitShape } from './types';
 import { API_ROOT } from './services/platform';
 import { t } from './services/i18n';
 
@@ -41,6 +41,12 @@ export const api = {
   async getShapes(cityId: string): Promise<{ shapes: TransitShape[]; status: 'loaded' | 'unavailable' }> {
     const res = await fetch(`${API_ROOT}/shapes/${cityId}`);
     if (!res.ok) throw new Error(t("Nije moguće učitati trase"));
+    return res.json();
+  },
+
+  async getTripStops(cityId: string, tripId: string, signal?: AbortSignal): Promise<{ stops: Stop[] }> {
+    const res = await fetch(`${API_ROOT}/${cityId}/trip/${encodeURIComponent(tripId)}/stops`, { signal });
+    if (!res.ok) throw new Error(t("Nije moguće učitati stanice"));
     return res.json();
   },
 

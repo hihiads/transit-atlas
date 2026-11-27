@@ -47,6 +47,7 @@ interface MapViewProps {
   showStops: boolean;
   showShapes: boolean;
   selectedRouteId?: string | null;
+  routeStops?: Stop[];
   showBikes?: boolean;
   userLocation?: [number, number];
   onVehicleClick: (vehicle: Vehicle) => void;
@@ -72,6 +73,7 @@ export default function MapView({
   showStops,
   showShapes,
   selectedRouteId = null,
+  routeStops = [],
   showBikes = false,
   userLocation,
   onVehicleClick,
@@ -108,6 +110,30 @@ export default function MapView({
           key={`selected-${shape.id}`}
           positions={shape.coordinates}
           pathOptions={{ color: shape.color ? `#${shape.color}` : '#2563eb', weight: 5, opacity: 0.9 }}
+        />
+      ))}
+
+      {routeStops.map(stop => (
+        <CircleMarker
+          key={`route-stop-${stop.id}`}
+          center={[stop.lat, stop.lon]}
+          radius={6}
+          pathOptions={{ color: '#1d4ed8', fillColor: '#ffffff', fillOpacity: 1, weight: 3 }}
+          eventHandlers={{
+            click: () => onStopClick(stop),
+            add: (event) => {
+              const path = event.target.getElement() as SVGElement;
+              path.setAttribute('tabindex', '0');
+              path.setAttribute('role', 'button');
+              path.setAttribute('aria-label', t("Otvori stajalište {0}", stop.name));
+              path.addEventListener('keydown', (keyEvent) => {
+                if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+                  keyEvent.preventDefault();
+                  onStopClick(stop);
+                }
+              });
+            }
+          }}
         />
       ))}
 

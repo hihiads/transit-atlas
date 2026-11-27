@@ -897,6 +897,26 @@ app.get('/api/vehicle/:vehicleId', asyncRoute(async (req, res) => {
   });
 }));
 
+// Stanice na kojima staje putovanje
+app.get('/api/:cityId/trip/:tripId/stops', (req, res) => {
+  const { cityId, tripId } = req.params;
+  if (!['zagreb', 'hzpp', 'beograd'].includes(cityId)) return res.status(404).json({ error: 'Mreža nije pronađena' });
+  const data = cityId === 'hzpp' ? hzppData : cityId === 'beograd' ? beogradData : gtfsData;
+  const stops = tripStopsFor(data, tripId).map(entry => {
+    const stop = data.stopsById.get(entry.id);
+    return {
+      id: entry.id,
+      name: stop?.stop_name ?? '',
+      lat: entry.lat,
+      lon: entry.lon,
+      code: stop?.stop_code == null ? null : String(stop.stop_code),
+      wheelchairAccessible: stop?.wheelchair_boarding === '1',
+      sequence: entry.sequence
+    };
+  }).filter(stop => Number.isFinite(stop.lat) && Number.isFinite(stop.lon));
+  res.json({ stops, status: stops.length ? 'loaded' : 'unavailable' });
+});
+
 // Polasci sa stanice
 app.get('/api/:cityId/stop/:stopId/departures', asyncRoute(async (req, res) => {
   const { cityId, stopId } = req.params;
