@@ -746,6 +746,36 @@ app.get('/api/cities', (req, res) => {
   }]);
 });
 
+const servedStopsCache = new WeakMap();
+// Stops that have at least one scheduled departure on a service that is still valid today or later.
+function servedStopIds(data) {
+  const today = zagrebDateParts(new Date());
+  const todayKey = `${today.year}${String(today.month).padStart(2, '0')}${String(today.day).padStart(2, '0')}`;
+  const cached = servedStopsCache.get(data.stops);
+  if (cached?.todayKey === todayKey && cached.trips === data.trips) return cached.ids;
+  const liveServices = new Set(data.calendar.filter(row => String(row.end_date) >= todayKey).map(row => String(row.service_id)));
+  for (const row of data.calendarDates) {
+    if (String(row.exception_type) === '1' && String(row.date) >= todayKey) liveServices.add(String(row.service_id));
+  }
+  const ids = new Set();
+  if (data.stopTimesByStop instanceof Map) {
+    for (const [stopId, entries] of data.stopTimesByStop) {
+      for (let index = 0; index < entries.length; index += 3) {
+        const trip = data.trips[entries[index]];
+        if (trip && liveServices.has(String(trip.service_id))) { ids.add(String(stopId)); break; }
+      }
+    }
+  } else {
+    const tripsById = new Map(data.trips.map(trip => [String(trip.trip_id), trip]));
+    for (const row of data.stopTimes) {
+      const trip = tripsById.get(String(row.trip_id));
+      if (trip && liveServices.has(String(trip.service_id))) ids.add(String(row.stop_id));
+    }
+  }
+  servedStopsCache.set(data.stops, { todayKey, trips: data.trips, ids });
+  return ids;
+}
+
 // Stanice
 app.get('/api/stops/:cityId', (req, res) => {
   const { cityId } = req.params;
@@ -755,8 +785,10 @@ app.get('/api/stops/:cityId', (req, res) => {
     return res.json({ stops: [], status: 'unavailable' });
   }
 
+  const served = servedStopIds(data);
+  const stops = served.size ? data.stops.filter(stop => served.has(String(stop.stop_id))) : data.stops;
   res.json({
-    stops: data.stops.map(stop => ({
+    stops: stops.map(stop => ({
       id: stop.stop_id,
       name: stop.stop_name,
       lat: parseFloat(stop.stop_lat),
@@ -765,7 +797,7 @@ app.get('/api/stops/:cityId', (req, res) => {
       wheelchairAccessible: stop.wheelchair_boarding === '1'
     })),
     status: 'loaded',
-    count: data.stops.length
+    count: stops.length
   });
 });
 
