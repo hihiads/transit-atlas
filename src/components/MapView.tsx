@@ -3,7 +3,6 @@ import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker, Polyline, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { Vehicle, Stop, TransitShape } from '../types';
-import BikeShareLayer from './BikeShareLayer';
 
 // Ikone za različite tipove vozila
 const busIcon = L.divIcon({
@@ -45,10 +44,8 @@ interface MapViewProps {
   center: [number, number];
   zoom: number;
   showStops: boolean;
-  showShapes: boolean;
-  selectedRouteId?: string | null;
+  selectedRouteIds?: string[];
   routeStops?: Stop[];
-  showBikes?: boolean;
   userLocation?: [number, number];
   onVehicleClick: (vehicle: Vehicle) => void;
   onStopClick: (stop: Stop) => void;
@@ -71,10 +68,8 @@ export default function MapView({
   center,
   zoom,
   showStops,
-  showShapes,
-  selectedRouteId = null,
+  selectedRouteIds = [],
   routeStops = [],
-  showBikes = false,
   userLocation,
   onVehicleClick,
   onStopClick,
@@ -94,18 +89,9 @@ export default function MapView({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <BikeShareLayer visible={showBikes} />
       {userLocation && <CircleMarker center={userLocation} radius={8} pathOptions={{ color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }}><Popup>{t("Vaša lokacija")}</Popup></CircleMarker>}
 
-      {showShapes && shapes.map(shape => shape.coordinates.length > 1 && (
-        <Polyline
-          key={shape.id}
-          positions={shape.coordinates}
-          pathOptions={{ color: shape.color ? `#${shape.color}` : '#2563eb', weight: 3, opacity: 0.5 }}
-        />
-      ))}
-
-      {selectedRouteId && shapes.filter(shape => shape.routeId === selectedRouteId && shape.coordinates.length > 1).map(shape => (
+      {shapes.filter(shape => selectedRouteIds.includes(shape.routeId) && shape.coordinates.length > 1).map(shape => (
         <Polyline
           key={`selected-${shape.id}`}
           positions={shape.coordinates}

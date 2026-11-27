@@ -9,7 +9,6 @@ import { join } from 'path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { fetchFeed, extractFeed } from './services/gtfsArchive.js';
-import { listCroatianBikeStations } from './services/bikeShare.js';
 import { estimateNextStop, vehicleHasPassedStop } from './services/vehiclePosition.js';
 import { parse } from 'csv-parse/sync';
 import { parse as parseStream } from 'csv-parse';
@@ -726,12 +725,6 @@ app.get('/api/transit-status', asyncRoute(async (req, res) => {
   res.set('Cache-Control', 'no-store').json(publicStatus(await readDashboardSettings()));
 }));
 
-// Javni bicikli (nextbike / Bajs) u svim hrvatskim gradovima.
-app.get('/api/bikes/hr', asyncRoute(async (req, res) => {
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=60');
-  res.json(await listCroatianBikeStations());
-}));
-
 // Gradovi
 app.get('/api/cities', (req, res) => {
   res.json([{
@@ -843,7 +836,7 @@ async function buildShapeResponse(data, filePath) {
   }
   const grouped = new Map();
   if (existsSync(filePath)) {
-    const parser = parseStream({ columns: true, skip_empty_lines: true, trim: true, relax_quotes: true });
+    const parser = parseStream({ bom: true, columns: true, skip_empty_lines: true, trim: true, relax_quotes: true });
     const input = createReadStream(filePath);
     input.on('error', error => parser.destroy(error));
     input.pipe(parser);
@@ -867,6 +860,7 @@ async function buildShapeResponse(data, filePath) {
       coordinates: points
     };
   });
+  if (!shapes.length) console.warn(`[GTFS Static] shapes.txt: nema trasa (datoteka ${existsSync(filePath) ? 'postoji' : 'nedostaje u arhivi'})`);
   return { shapes, status: 'loaded', count: shapes.length };
 }
 

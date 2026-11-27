@@ -44,10 +44,8 @@ function App() {
   const [maintenance, setMaintenance] = useState(false);
   const [dataStatus, setDataStatus] = useState<'demo' | 'live' | 'unavailable'>('demo');
   const [showStops, setShowStops] = useState(false);
-  const [showShapes, setShowShapes] = useState(false);
   const [showSelectedRoute, setShowSelectedRoute] = useState(() => localStorage.getItem('transit-show-selected-route') !== '0');
   const [tripStops, setTripStops] = useState<Stop[]>([]);
-  const [showBikes, setShowBikes] = useState(() => localStorage.getItem('transit-show-bikes') === '1');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([45.815, 15.9819]);
   const [mapZoom, setMapZoom] = useState(12);
@@ -141,7 +139,6 @@ function App() {
     }
 
     setShowStops(selectedCity.id !== 'zagreb');
-    setShowShapes(false);
 
     // Učitaj vozila
     setTransitDataLoading(true);
@@ -325,9 +322,14 @@ function App() {
     );
   }
 
-  const selectedRouteId = selectedVehicle
-    ? selectedVehicle.routeId ?? routes.find(route => route.shortName === selectedVehicle.line)?.id ?? null
-    : null;
+  const selectedRouteIds = selectedVehicle
+    ? [
+        ...(selectedVehicle.routeId ? [selectedVehicle.routeId] : []),
+        ...routes
+          .filter(route => route.shortName === selectedVehicle.line && route.type === selectedVehicle.type)
+          .map(route => route.id)
+      ]
+    : [];
 
   if (!selectedCity) {
     return (
@@ -371,9 +373,7 @@ function App() {
             <button onClick={() => { findMyLocation(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? t("Tražim lokaciju…") : t("Moja lokacija")}</button>
             <button onClick={() => { findNearestStop(); setShowMapMenu(false); }} disabled={locating} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm disabled:opacity-60">{locating ? t("Tražim…") : t("Moja najbliža stanica")}</button>
             <button onClick={() => setShowStops(!showStops)} aria-pressed={showStops} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showStops ? t("✓ Sakrij stanice") : t("Prikaži stanice")}</button>
-            <button onClick={() => setShowShapes(!showShapes)} aria-pressed={showShapes} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showShapes ? t("✓ Sakrij trase linija") : t("Prikaži trase linija")}</button>
             <button onClick={() => { const next = !showSelectedRoute; setShowSelectedRoute(next); localStorage.setItem('transit-show-selected-route', next ? '1' : '0'); }} aria-pressed={showSelectedRoute} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showSelectedRoute ? t("✓ Isključi trasu odabrane linije") : t("Prikaži trasu odabrane linije")}</button>
-            <button onClick={() => { const next = !showBikes; setShowBikes(next); localStorage.setItem('transit-show-bikes', next ? '1' : '0'); }} aria-pressed={showBikes} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-slate-800 shadow-sm">{showBikes ? t("✓ Sakrij javne bicikle") : t("Prikaži javne bicikle")}</button>
             </div>
           </details>
           {locationMessage && <p className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-700" role="status">{locationMessage}</p>}
@@ -401,7 +401,7 @@ function App() {
           <div className="absolute left-14 right-3 top-2 z-[999] md:hidden">
             <FilterPanel compact vehicles={vehicles} routes={routes} selectedType={selectedType} selectedLine={selectedLine} onTypeChange={(type) => { setSelectedType(type); setSelectedLine(''); }} onLineChange={setSelectedLine} />
           </div>
-        {selectedCity.status === 'active' ? <MapView vehicles={filteredVehicles} stops={showStops ? stops : []} shapes={shapes} center={mapCenter} zoom={mapZoom} userLocation={userLocation} showStops={showStops} showShapes={showShapes} selectedRouteId={showSelectedRoute ? selectedRouteId : null} routeStops={showSelectedRoute ? tripStops : []} showBikes={showBikes} onVehicleClick={setSelectedVehicle} onStopClick={(stop) => { setNearestDistance(null); setSelectedStop(stop); }} /> : <div className="flex h-full w-full items-center justify-center bg-gray-100"><div className="max-w-md p-8 text-center"><div className="mb-2 text-2xl font-bold text-gray-800">{selectedCity.name}</div><div className="mb-4 text-gray-600">{t("Podaci uživo trenutno nisu dostupni za ovaj grad.")}</div><div className="text-sm text-gray-500">{t("Uskoro ćemo dodati podršku za više gradova.")}</div></div></div>}
+        {selectedCity.status === 'active' ? <MapView vehicles={filteredVehicles} stops={showStops ? stops : []} shapes={shapes} center={mapCenter} zoom={mapZoom} userLocation={userLocation} showStops={showStops} selectedRouteIds={showSelectedRoute ? selectedRouteIds : []} routeStops={showSelectedRoute ? tripStops : []} onVehicleClick={setSelectedVehicle} onStopClick={(stop) => { setNearestDistance(null); setSelectedStop(stop); }} /> : <div className="flex h-full w-full items-center justify-center bg-gray-100"><div className="max-w-md p-8 text-center"><div className="mb-2 text-2xl font-bold text-gray-800">{selectedCity.name}</div><div className="mb-4 text-gray-600">{t("Podaci uživo trenutno nisu dostupni za ovaj grad.")}</div><div className="text-sm text-gray-500">{t("Uskoro ćemo dodati podršku za više gradova.")}</div></div></div>}
         </div>
       </div>
       {selectedVehicle && (
