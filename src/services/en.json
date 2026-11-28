@@ -670,5 +670,6 @@
   "ZET ne šalje predviđanje za svako stajalište; Procjena uživo koristi lokaciju vozila, ostalo je po rasporedu.": "ZET does not provide estimates for every stop. Live estimates use vehicle positions. Other times are scheduled.",
   "ZET podatke nije moguće osvježiti.": "Could not refresh ZET data.",
   "ZET-ov prikaz koristi javno objavljene statičke GTFS podatke i GTFS podatke u stvarnom vremenu, kada su dostupni. Statički podaci mogu sadržavati linije, stajališta, trase i planirane vozne redove. Podaci u stvarnom vremenu mogu sadržavati prijavljene položaje vozila i ažuriranja putovanja. Transitly ih razvrstava i prikazuje na karti i u filtrima za autobus, tramvaj, liniju, smjer i stajalište. Prikaz položaja ovisi o tome šalje li ZET-ov feed podatak za konkretno vozilo i kada je taj podatak poslan.": "The ZET section uses publicly available static and real-time GTFS data. Static data may include routes, stops, paths and scheduled timetables. Real-time data may include reported vehicle positions and trip updates. Transitly organises and displays this data on the map and in filters for buses, trams, routes, directions and stops. A vehicle's position depends on whether ZET's feed reports it and when the data was sent.",
-  "ZET-ovoj stranici o GTFS podacima": "ZET's GTFS data page"
+  "ZET-ovoj stranici o GTFS podacima": "ZET's GTFS data page",
+  "Samo direktni vlakovi": "Direct trains only"
 }

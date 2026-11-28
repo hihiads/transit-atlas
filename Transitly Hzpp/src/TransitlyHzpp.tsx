@@ -46,7 +46,7 @@ const HZPP = `${API_ORIGIN}/hzpp-api`;
 const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 const email = 'info@transitly.eu';
 
-type JourneySearch = { from: Station; to: Station; date: string; time: string };
+type JourneySearch = { from: Station; to: Station; date: string; time: string; directOnly: boolean };
 
 function zagrebDate() {
   return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Zagreb', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -100,6 +100,7 @@ export default function TransitlyHzpp() {
   const [toName, setToName] = useState('');
   const [travelDate, setTravelDate] = useState(zagrebDate);
   const [travelTime, setTravelTime] = useState('00:00');
+  const [directOnly, setDirectOnly] = useState(true);
   const [search, setSearch] = useState<JourneySearch | null>(null);
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [loadingStations, setLoadingStations] = useState(true);
@@ -204,8 +205,10 @@ export default function TransitlyHzpp() {
     try {
       const params = new URLSearchParams({
         lang: 'hr', deviceType: 'WEB', clientUICOperatorCode: '1178', from: String(query.from.id), to: String(query.to.id),
-        startTime: `${query.date}T${query.time}:00`, trainClass: '2', benefit: '1', countForBenefit: '1', transportChanges: 'DIRECT'
+        startTime: `${query.date}T${query.time}:00`, trainClass: '2', benefit: '1', countForBenefit: '1'
       });
+      // Samo direktni vlakovi šalju parametar; bez njega HŽPP može vratiti i veze s presjedanjem.
+      if (query.directOnly) params.set('transportChanges', 'DIRECT');
       const response = await fetch(`${HZPP}/journeys-with-details/busInfo?${params}`);
       if (currentRequest !== requestId.current) return;
       if (!response.ok) throw new Error(t("HŽPP trenutačno ne vraća podatke. Pokušaj ponovno."));
@@ -260,7 +263,7 @@ export default function TransitlyHzpp() {
     if (!from || !to) { setMessage(t("Odaberi polaznu i odredišnu stanicu s popisa.")); return; }
     setJourneys([]);
     setMessage('');
-    setSearch({ from, to, date: travelDate, time: travelTime });
+    setSearch({ from, to, date: travelDate, time: travelTime, directOnly });
   }
 
   function useNearestStation() {
@@ -358,6 +361,14 @@ export default function TransitlyHzpp() {
             <label><span>{t("Datum putovanja")}</span><input type="date" value={travelDate} onChange={event => setTravelDate(event.target.value)} required /></label>
             <label><span>{t("Polazak nakon")}</span><input type="time" value={travelTime} onChange={event => setTravelTime(event.target.value)} required /></label>
           </div>
+          <label className="direct-toggle">
+            <input type="checkbox" checked={directOnly} onChange={event => {
+              const next = event.target.checked;
+              setDirectOnly(next);
+              if (search) setSearch({ ...search, directOnly: next });
+            }} />
+            <span>{t("Samo direktni vlakovi")}</span>
+          </label>
           <div className="search-actions">
             <button className="nearest-button" type="button" onClick={useNearestStation} disabled={locationBusy || loadingStations}><Icon name="locate" size={17} />{locationBusy ? t("Tražim stanicu…") : t("Najbliža stanica")}</button>
             <button className="search-button" type="submit" disabled={loadingStations || loadingJourneys}>{loadingJourneys ? t("Tražim vlakove…") : t("Pronađi vlakove")}</button>

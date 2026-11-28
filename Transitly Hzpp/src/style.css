@@ -38,3 +38,5 @@ html[data-theme='dark'] .route-legs small{color:#9fb3c2}
 .train-search input{min-width:0;width:100%;height:44px;border:0;background:transparent;color:inherit;font-size:16px}
 :root[data-theme="dark"] .train-search{background:#14283a;color:#e8f2f7}
 @media(max-width:420px){.field-copy input{text-overflow:ellipsis}.topbar{height:52px;gap:5px}.top-action{min-width:36px;justify-content:center}.refresh-button span{display:none}}
+.direct-toggle{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:14px}
+.direct-toggle input{width:18px;height:18px}
