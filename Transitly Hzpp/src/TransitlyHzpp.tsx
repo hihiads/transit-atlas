@@ -326,6 +326,11 @@ export default function TransitlyHzpp() {
           {showSiteMenu && <nav id="hzpp-site-menu" className="site-menu" aria-label={t("Informacije o Transitlyju")}>
             <LanguageSelect />
             <button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(enabled => !enabled)}>{darkMode ? t("☀️ Svijetli način rada") : t("🌙 Tamni način rada")}</button>
+            <button type="button" aria-pressed={directOnly} onClick={() => {
+              const next = !directOnly;
+              setDirectOnly(next);
+              if (search) setSearch({ ...search, directOnly: next });
+            }}>{directOnly ? t("✓ Samo direktni vlakovi") : t("Samo direktni vlakovi")}</button>
             <InstallAppButton />
             <a href="/status?area=hzpp">{t("Stanje usluga")}</a><a href="/feedback?area=hzpp">{t("Prijavi grešku")}</a>
             <a href="/privacy">{t("Politika privatnosti")}</a><a href="/terms">{t("Uvjeti korištenja")}</a><a href="/cookies">{t("Politika kolačića")}</a><a href={`mailto:${email}`}>{t("Kontakt")}</a>
@@ -361,14 +366,6 @@ export default function TransitlyHzpp() {
             <label><span>{t("Datum putovanja")}</span><input type="date" value={travelDate} onChange={event => setTravelDate(event.target.value)} required /></label>
             <label><span>{t("Polazak nakon")}</span><input type="time" value={travelTime} onChange={event => setTravelTime(event.target.value)} required /></label>
           </div>
-          <label className="direct-toggle">
-            <input type="checkbox" checked={directOnly} onChange={event => {
-              const next = event.target.checked;
-              setDirectOnly(next);
-              if (search) setSearch({ ...search, directOnly: next });
-            }} />
-            <span>{t("Samo direktni vlakovi")}</span>
-          </label>
           <div className="search-actions">
             <button className="nearest-button" type="button" onClick={useNearestStation} disabled={locationBusy || loadingStations}><Icon name="locate" size={17} />{locationBusy ? t("Tražim stanicu…") : t("Najbliža stanica")}</button>
             <button className="search-button" type="submit" disabled={loadingStations || loadingJourneys}>{loadingJourneys ? t("Tražim vlakove…") : t("Pronađi vlakove")}</button>
